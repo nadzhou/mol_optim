@@ -95,7 +95,7 @@ So the GNN work is *replacing the state encoder*, not bolting onto it.
 TF1-era). None of this installs on Apple Silicon in 2026.
 
 Fix: write our own replay buffer (~40 lines), drop TF entirely, move to current
-torch + PyTorch Geometric.
+torch. PyTorch Geometric was in this plan and is not used — see [Step 2](#step-2--swap-fingerprintmlp--gnn-encoder).
 
 ## Action space — fragment edits over a precedented vocabulary
 
@@ -164,7 +164,14 @@ discount has to be re-tuned to match, or the terminal reward is weighted wrong.
 | Stereo | one-hot 6-way |
 
 **Graph-level** (concatenated after pooling): steps remaining (normalized) —
-**required**; optionally heavy-atom count and Lipinski descriptors.
+**required**; heavy-atom count, taken because mean pooling is size-invariant and QED
+depends strongly on size; Lipinski descriptors, not taken. Both are divided by
+`max_steps_per_episode`, which keeps the atom count near 1.0 as well — an episode adds
+at most one atom per step.
+
+Every categorical carries a trailing "other" bucket, including the ones the table above
+writes as fixed-width. An atom the tables do not name then lands in a real column
+instead of an all-zero row, which reaches the network as "no atom" and trains fine.
 
 `hyp.py` restricts `atom_types = ["C", "O", "N"]`, where it serves double duty as
 both the featurization alphabet and the atom-addition action space. With
@@ -392,13 +399,25 @@ a much larger share of the discount.
 ```python
 @pytest.mark.slow
 def test_dqn_beats_random_on_qed():
-    rl     = run(agent="dqn",    episodes=2000, seed=0)
-    random = run(agent="random", episodes=2000, seed=0)
+    rl     = run(agent="dqn",    episodes=5000, seed=0)
+    random = run(agent="random", episodes=5000, seed=0)
     assert rl.final_mean_reward > random.final_mean_reward + 0.1
 ```
 **The random baseline is the test.** A DQN that ties random is broken, and a
 mediocre-but-nonzero reward curve looks like progress without this comparison.
-Then pin `final_mean_reward > 0.90` as a golden regression.
+
+**Measured**, 5000 episodes at seed 0, published `bootstrap_dqn.json` config:
+DQN **0.895**, random **0.145**, best single molecule 0.943. The golden regression is
+pinned at 0.85 — below the measured number to survive refactors, not to leave room for
+a regression.
+
+Two notes on getting there. The defaults in `MolDQN-pytorch/hyp.py` are not the
+published ones and cost 0.19 of QED: gamma 0.95 where the environment already discounts
+by steps remaining (double discounting), a gradient step every 20 environment steps
+instead of every 4, 3- and 4-membered rings allowed, a 1M-transition replay buffer
+instead of 5000, and no gradient clipping. And the published 0.94 *mean* uses double Q
+over 12 bootstrapped heads, which this does not implement — a single-head, single-
+estimator DQN lands at 0.895 with the curve still climbing at episode 5000.
 
 ## Step 2 — Swap fingerprint+MLP → GNN encoder
 
@@ -463,10 +482,108 @@ magnitude off, go back to the levers in Action space before training anything.
 - Feature dimension stable across molecules
 - Every parameter gets a non-`None`, non-zero gradient after one backward pass
 
+### Measured
+
+5000 episodes at seed 0, the same config as Step 1: GNN **0.896**, fingerprint baseline
+**0.895** (`runs/dqn_graph_mse.csv`), random **0.146**. Best single molecule 0.928
+against the fingerprint run's 0.943.
+
+The means are a tie — 0.001 apart is noise. The difference is spread. Over the last 500
+episodes the GNN's per-episode standard deviation is 0.047 against the fingerprint run's
+0.087, and 0.4% of its episodes fall below 0.5 against 1.2%. It is also narrower: 302
+distinct molecules in those 500 episodes against 353. Steadier and more mode-collapsed
+are the same fact.
+
+The encoder does that with 56k parameters against the MLP's 2.7M, a factor of 48.
+
+Throughput: 5.2 ms median to featurize and score a 46-candidate set, against the 0.5 s
+budget above. Over a run the rate falls from 70 to 23 steps/s as the agent builds larger
+molecules and the candidate sets grow with them.
+
+The molecules are still nonsense — fused strained heterocycles, N-hydroxyls, enol
+ethers, one aminooxazole motif repeated across most of the top 12. That is QED, not the
+encoder. QED scores descriptors and has no term for strain, stability, or
+synthesizability, and an agent free to build any graph one atom at a time will find the
+corner where it peaks. The fragment vocabulary is the fix, because it constrains
+construction rather than scoring.
+
+### Three decisions taken here
+
+**Plain torch, not PyTorch Geometric.** Message passing is one `index_add_` for the
+neighbour sum and another for pooling, roughly 40 lines in `encoder.py`. The repo
+already had the ragged machinery — the segment max over candidate sets — so PyG would
+have saved little, and its scatter kernels are nondeterministic on GPU, which is exactly
+what Step 0 exists to prevent. Revisit if a later step needs an operator that is painful
+to write by hand.
+
+**Codes in the buffer, one-hot at the network.** Atom and bond features are stored as
+int8 codes (13 bytes an atom against 48 for the one-hot) and expanded by one vectorized
+scatter where a batch enters the network. The buffer holds a whole candidate set per
+transition, roughly 200k graphs at capacity.
+
+**Mean pooling, with the atom count as a graph feature.** Sum pooling makes the
+embedding grow with the molecule and swamps the per-atom signal; mean pooling throws
+size away entirely, and QED depends on size. So: mean pool, and hand the count to the
+head separately.
+
 ## Step 3 — Plug in the TDC GSK3β oracle
 
 Confirm the loop optimizes a real bioactivity signal. Reuses Step 1's
 beats-random test with the oracle as reward.
+
+The oracle is a random forest of 100 trees over a 2048-bit ECFP4 fingerprint, trained on
+ExCAPE-DB GSK3β actives and published through Therapeutics Data Commons. Its only job is
+to answer one question: when a reward curve is flat, is the loop broken or is the reward
+broken? The oracle is fixed and published, so on this reward a flat curve is the loop.
+
+Step 2 ended with QED at 0.896 and a top-12 of fused strained heterocycles — molecules
+that score well and mean nothing. QED has no term for whether a structure can exist, so
+that outcome is the reward's, not the agent's. This step swaps in a reward that at least
+scores a real target.
+
+### The reward is TDC's, to 2.3e-8 — the gate
+
+`tests/fixtures/gsk3b_reference.sdf` holds 53 molecules with the score PyTDC 1.0.0 gives
+them, computed in a throwaway venv on scikit-learn 1.2.2: 14 ZINC molecules chosen to
+spread across the oracle's output range, 24 molecules from random rollouts of this
+environment, and the drug fixtures. `test_matches_tdc_on_the_reference_set` re-scores
+all 53 with our own forest walk.
+
+This is the gate because every way of getting it wrong returns a number rather than an
+error. Radius 3 instead of 2, count bits instead of binary, a walk that stops one level
+above the leaf and reads an internal node's class ratio — each of those hands the
+training loop a plausible float in [0, 1] and the run quietly optimizes something else.
+
+### The oracle is vendored, not imported
+
+`fetch_gsk3b.py` downloads TDC's 28 MB pickle once, verifies it against a pinned SHA-256,
+and writes `models/gsk3b_forest.npz` — 385,384 nodes as five flat arrays, 2.0 MB.
+`oracle_gsk3b.py` walks that by hand: 100 trees stepping together as one array of node
+indices, 78 rounds deep, 183 µs a molecule against the 15-40 ms a training step already
+costs.
+
+Three reasons not to call PyTDC at runtime. Its oracle takes a SMILES string, and
+nothing in this loop writes a molecule as text. It pins `scikit-learn==1.2.2` and
+`numpy<2` against this venv's numpy 2.5, because the published pickle only unpickles
+under the scikit-learn that wrote it. And the pickle stays a black box that has to be
+re-executed on every run, where the arrays are inspectable and version-free.
+
+The conversion never imports sklearn: the unpickler maps every sklearn class to an inert
+stub that collects the state dict it is handed, so what comes back is numpy arrays. That
+is what makes unpickling a 28 MB download safe — a pickle can only construct what
+`find_class` returns.
+
+Every split in the forest turned out to be a bit test — threshold exactly 0.5 over a 0/1
+feature — which is why the walk is three lines. `fetch_gsk3b.py` asserts it rather than
+assuming it.
+
+### Also
+- Every walk reaches a leaf: after `depth` rounds from any root, on random bit vectors,
+  the node must be one whose children are itself. Catches a `depth` that is one short.
+- Atom numbering does not change the score.
+- A molecule the environment built scores the same after an SDF round trip. The
+  reference fixture reaches the test through a file; training scores the RWMol directly,
+  and if perception differed between those two the fixture would pin the wrong numbers.
 
 ## Step 3b — Pretrain the encoder on ZINC (AttrMask)
 

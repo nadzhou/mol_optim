@@ -31,7 +31,7 @@ class Config:
 
     # State encoder (Step 2: a GNN over the molecular graph). The published MolDQN
     # numbers below were tuned against a 2049 -> 1024 -> 512 -> 128 -> 32 -> 1 MLP over
-    # a Morgan fingerprint; this encoder is ~90x smaller in parameters.
+    # a Morgan fingerprint, 2.7M parameters against this network's 56k.
     hidden_dim: int = 64
     num_message_passing_layers: int = 3
 

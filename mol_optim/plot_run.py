@@ -28,6 +28,11 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--window", type=int, default=100)
     parser.add_argument(
+        "--ylabel",
+        default="terminal reward",
+        help="what the reward is: QED at Step 2, the GSK3B oracle at Step 3",
+    )
+    parser.add_argument(
         "--random-baseline",
         type=float,
         default=None,
@@ -63,7 +68,7 @@ if __name__ == "__main__":
             label=f"random baseline ({args.random_baseline:.3f})",
         )
 
-    reward_axes.set_ylabel("terminal QED")
+    reward_axes.set_ylabel(args.ylabel)
     reward_axes.set_ylim(0, 1)
     reward_axes.legend(loc="lower right", fontsize=9)
     reward_axes.grid(alpha=0.25)

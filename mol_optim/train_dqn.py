@@ -7,9 +7,11 @@ it is one batched forward pass, inline, where the shapes are visible.
 
 import time
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import torch
+from rdkit import Chem
 
 from mol_optim import (
     config,
@@ -18,6 +20,7 @@ from mol_optim import (
     environment,
     featurize,
     graph_key,
+    oracle_gsk3b,
     replay_buffer,
     report,
     results,
@@ -44,6 +47,7 @@ def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
 
 def train(
     cfg: config.Config,
+    reward_fn: Callable[[Chem.Mol], float],
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
     report_every: int = 0,
@@ -89,7 +93,7 @@ def train(
                     )  # [num_candidates, 1]
                 choice = int(torch.argmax(q_candidates))
 
-            result = environment.step(episode, choice, rewards.qed, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg)
             next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
             next_candidates = featurize.graphs(episode.valid_actions)
             buffer.push(
@@ -221,12 +225,25 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--report-every", type=int, default=25)
     parser.add_argument(
+        "--reward",
+        choices=("qed", "gsk3b"),
+        default="qed",
+        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3",
+    )
+    parser.add_argument(
         "--top-k", type=Path, default=None, help="stem for a top-k drawing and SDF"
     )
     args = parser.parse_args()
 
+    if args.reward == "qed":
+        reward_fn = rewards.qed
+    else:
+        forest = oracle_gsk3b.load()
+        reward_fn = lambda mol: oracle_gsk3b.score(forest, mol)  # noqa: E731
+
     run = train(
         config.Config(episodes=args.episodes, seed=args.seed),
+        reward_fn,
         log_path=args.log,
         checkpoint_path=args.checkpoint,
         report_every=args.report_every,

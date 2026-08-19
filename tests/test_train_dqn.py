@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from mol_optim import config, dqn, environment, featurize, train_dqn
+from mol_optim import config, dqn, environment, featurize, rewards, train_dqn
 from tests.molecules import NAMED
 
 SMALL = config.Config(
@@ -47,13 +47,18 @@ def test_target_network_lags_and_tracks_the_online_network(tmp_path):
     # this checkpoint is the initialization.
     train_dqn.train(
         config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
+        rewards.qed,
         checkpoint_path=never_updates,
     )
     train_dqn.train(
-        config.Config(**{**SMALL.__dict__, "polyak": 1.0}), checkpoint_path=frozen_target
+        config.Config(**{**SMALL.__dict__, "polyak": 1.0}),
+        rewards.qed,
+        checkpoint_path=frozen_target,
     )
     train_dqn.train(
-        config.Config(**{**SMALL.__dict__, "polyak": 0.0}), checkpoint_path=copied_target
+        config.Config(**{**SMALL.__dict__, "polyak": 0.0}),
+        rewards.qed,
+        checkpoint_path=copied_target,
     )
 
     initial, frozen, copied = (

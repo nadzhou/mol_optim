@@ -5,13 +5,23 @@ ties this is a broken agent, and nothing else in the test suite catches that.
 """
 
 import time
+from typing import Callable
 
 import numpy as np
+from rdkit import Chem
 
-from mol_optim import config, determinism, environment, graph_key, report, results, rewards
+from mol_optim import (
+    config,
+    determinism,
+    environment,
+    graph_key,
+    oracle_gsk3b,
+    results,
+    rewards,
+)
 
 
-def rollout(cfg: config.Config) -> results.Run:
+def rollout(cfg: config.Config, reward_fn: Callable[[Chem.Mol], float]) -> results.Run:
     determinism.seed_everything(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
 
@@ -23,7 +33,7 @@ def rollout(cfg: config.Config) -> results.Run:
         episode = environment.reset(cfg)
         while True:
             choice = int(rng.integers(len(episode.valid_actions)))
-            result = environment.step(episode, choice, rewards.qed, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg)
             if result.terminated:
                 break
         episode_rewards.append(result.reward)
@@ -42,9 +52,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--reward",
+        choices=("qed", "gsk3b"),
+        default="qed",
+        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3",
+    )
     args = parser.parse_args()
 
-    run = rollout(config.Config(episodes=args.episodes, seed=args.seed))
+    if args.reward == "qed":
+        reward_fn = rewards.qed
+    else:
+        forest = oracle_gsk3b.load()
+        reward_fn = lambda mol: oracle_gsk3b.score(forest, mol)  # noqa: E731
+
+    run = rollout(config.Config(episodes=args.episodes, seed=args.seed), reward_fn)
     best_molecule, best_reward = run.best
     print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
     print(
