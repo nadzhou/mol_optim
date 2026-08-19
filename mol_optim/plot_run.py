@@ -67,7 +67,7 @@ if __name__ == "__main__":
     reward_axes.set_ylim(0, 1)
     reward_axes.legend(loc="lower right", fontsize=9)
     reward_axes.grid(alpha=0.25)
-    loss_axes.set_ylabel("Huber loss")
+    loss_axes.set_ylabel("MSE loss")
     loss_axes.set_xlabel("episode")
     loss_axes.set_yscale("log")
     loss_axes.grid(alpha=0.25)
