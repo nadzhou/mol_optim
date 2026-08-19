@@ -53,3 +53,27 @@ class Config:
     epsilon_end: float = 0.01
 
     episodes: int = 5000
+
+
+@dataclass(frozen=True)
+class PretrainConfig:
+    """Every knob for the ZINC AttrMask pretraining, plan.md Step 3b.
+
+    Separate from Config, and passed alongside it: the encoder's shape stays in Config
+    so the pretrained encoder and the RL encoder are built from one set of numbers.
+    Two configs that each carried a hidden_dim would drift apart, and the checkpoint
+    would load into a network of the wrong width.
+    """
+
+    seed: int = 0
+    # ZINC 250k, minus the held-out tail. None means every molecule in the file.
+    num_molecules: int | None = None
+    num_holdout: int = 5000
+    # Fraction of atoms in a batch whose feature row is zeroed. 0.15 is Hu et al. 2020.
+    mask_fraction: float = 0.15
+    epochs: int = 10
+    batch_size: int = 128
+    # 1e-3, not the DQN's 1e-4: this is plain supervised training with a fixed target,
+    # not a moving Q target that a large step can push away from itself.
+    learning_rate: float = 1e-3
+    grad_clip_norm: float = 10.0

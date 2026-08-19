@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from mol_optim import config, dqn, environment, featurize, rewards, train_dqn
+from mol_optim import config, dqn, environment, featurize, pretrain, rewards, train_dqn
 from tests.molecules import NAMED
 
 SMALL = config.Config(
@@ -35,6 +35,31 @@ def load(path):
 
 def state_dicts_equal(first, second) -> bool:
     return all(torch.equal(first[key], second[key]) for key in first)
+
+
+def test_a_pretrained_encoder_reaches_the_training_loop(tmp_path):
+    # Step 3b's checkpoint is worth nothing if it does not arrive here. batch_size above
+    # anything the buffer can hold means no gradient step runs, so the checkpoint this
+    # run writes is its initialization, and the encoder in it should be the pretrained
+    # one weight for weight.
+    encoder_path = tmp_path / "encoder.pt"
+    torch.manual_seed(3)  # not the seed train() starts from, so equality means loading
+    pretrained = pretrain.MaskedAtomPredictor(SMALL)
+    pretrain.save_encoder(
+        encoder_path, pretrained, SMALL, config.PretrainConfig(), pretrain.Measurement(0.5, 0.8)
+    )
+
+    initialization = tmp_path / "initialization.pt"
+    train_dqn.train(
+        config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
+        rewards.qed,
+        checkpoint_path=initialization,
+        pretrained_encoder=encoder_path,
+    )
+
+    weights = load(initialization)["online_dqn"]
+    for name, parameter in pretrained.encoder.named_parameters():
+        assert torch.equal(weights[f"encoder.{name}"], parameter), name
 
 
 def test_target_network_lags_and_tracks_the_online_network(tmp_path):

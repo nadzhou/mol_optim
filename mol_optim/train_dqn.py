@@ -21,6 +21,7 @@ from mol_optim import (
     featurize,
     graph_key,
     oracle_gsk3b,
+    pretrain,
     replay_buffer,
     report,
     results,
@@ -51,12 +52,19 @@ def train(
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
     report_every: int = 0,
+    pretrained_encoder: Path | None = None,
 ) -> results.Run:
     determinism.seed_everything(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
     device = torch.device("cpu")
 
     online_dqn = dqn.MolDQN(cfg).to(device)
+    if pretrained_encoder is not None:
+        # Only the encoder. The Q head scores a reward that did not exist during
+        # pretraining, so it starts from its own initialization. load_encoder refuses a
+        # checkpoint built on another featurization or another encoder shape — the
+        # silent no-op this whole step is designed around (plan.md Step 3b).
+        online_dqn.encoder.load_state_dict(pretrain.load_encoder(pretrained_encoder, cfg))
     target_dqn = dqn.MolDQN(cfg).to(device)
     target_dqn.load_state_dict(online_dqn.state_dict())
     for parameter in target_dqn.parameters():
@@ -233,6 +241,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--top-k", type=Path, default=None, help="stem for a top-k drawing and SDF"
     )
+    parser.add_argument(
+        "--pretrained-encoder",
+        type=Path,
+        default=None,
+        help="a ZINC AttrMask checkpoint from mol_optim.pretrain, Step 3b",
+    )
     args = parser.parse_args()
 
     if args.reward == "qed":
@@ -247,6 +261,7 @@ if __name__ == "__main__":
         log_path=args.log,
         checkpoint_path=args.checkpoint,
         report_every=args.report_every,
+        pretrained_encoder=args.pretrained_encoder,
     )
     best_molecule, best_reward = run.best
     print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")

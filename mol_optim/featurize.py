@@ -15,6 +15,7 @@ fingerprint path is deleted rather than kept behind a flag (CLAUDE.md: no branch
 matrix); it stays reproducible from git history.
 """
 
+import hashlib
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -80,6 +81,30 @@ ATOM_FEATURE_LENGTH = sum(ATOM_BLOCKS)
 BOND_FEATURE_LENGTH = sum(BOND_BLOCKS)
 # Steps remaining and heavy-atom count, concatenated to the pooled embedding.
 NUM_GRAPH_FEATURES = 2
+
+
+def signature() -> str:
+    """A short hash of the featurization alphabet, recorded in every checkpoint.
+
+    An encoder pretrained on one featurization and then loaded against another reads
+    every input column as something it was not — a silent, total waste of the
+    pretraining (plan.md Step 3b). Widths alone do not catch it: reordering ATOM_TYPES
+    changes what every element column means and changes no dimension. So this hashes
+    the tables themselves, and pretrain.load_encoder refuses a checkpoint whose hash
+    is not this one.
+    """
+    tables = (
+        ATOM_TYPES,
+        HYBRIDIZATIONS,
+        CHIRAL_TAGS,
+        BOND_TYPES,
+        BOND_STEREO,
+        RING_SIZES,
+        ATOM_BLOCKS,
+        BOND_BLOCKS,
+        NUM_GRAPH_FEATURES,
+    )
+    return hashlib.sha256(repr(tables).encode()).hexdigest()[:16]
 
 
 @dataclass(frozen=True)

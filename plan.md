@@ -585,6 +585,53 @@ assuming it.
   reference fixture reaches the test through a file; training scores the RWMol directly,
   and if perception differed between those two the fixture would pin the wrong numbers.
 
+### Measured
+
+5000 episodes at seed 0, the same config as Step 2 with only the reward changed: DQN
+**0.610** final mean against a random floor of **0.077**, best single molecule 0.66 at
+28 heavy atoms, in 7653 s. For scale, 3000 ZINC molecules average 0.029 on this oracle
+and the best of those 3000 scores 0.51.
+
+The curve climbs the whole way: 0.090 over the first 500 episodes, 0.413 over episodes
+2000-2500, 0.584 over the last 500. Under 0.1 is where 60% of the first 500 episodes
+land and none of the last 500.
+
+The loop optimizes a real bioactivity model, which is what this step existed to
+establish. The next paragraph is the part worth reading.
+
+### The oracle gets gamed, and how it gets gamed is the finding
+
+All 12 top molecules share one core: two or three aminopyrazoles joined by NH bridges.
+That much is a real motif — aminopyrazoles hinge-bind and run through published kinase
+inhibitor series. What hangs off it is not: N-hydroxylamines in 12 of 12 molecules, 23 in total;
+hemiaminals in 11 of 12, 36 in total; aminals in 11 of 12, 15 in total. A hemiaminal
+falls apart in water. The agent found the fingerprint bits the forest votes on and built
+the cheapest structure that sets them.
+
+The two rewards are close to orthogonal at their own optima. The GSK3β top 12 score
+0.05-0.14 on QED; the Step 2 QED top 12 score 0.02-0.10 on the oracle. Neither reward
+constrains what the other measures, and the molecules that maximize either one are
+molecules no chemist would order.
+
+This is the failure mode [Reward](#the-failure-mode-to-design-around) predicts for the
+Step 4 pIC50 regressor, arriving two steps early against a published model that we did
+not fit. It carries two consequences. The guardrails listed there — applicability
+domain, ensemble standard deviation, reward clipping — are not optional extras for Step
+5. And the fragment vocabulary is the load-bearing fix, because a reward term can be
+gamed by construction while a vocabulary constrains construction itself: no edit can
+produce a hemiaminal if no fragment contains one.
+
+Diversity fell as the reward rose: 82 distinct molecules over the last 500 episodes,
+against 302 for the Step 2 QED run. An argmax policy at epsilon 0.01 collapses onto one
+motif, which is the argument for tier 4 (GFlowNet) in the ladder above.
+
+One difference to note in the run log: three RDKit warnings, "could not find number of
+expected rings", where neither QED run produced any. RDKit fell back to an approximate
+ring finder on three molecules, so the ring-size features on those three are
+approximate. Which molecules, and why this reward reaches them, is not chased down —
+the top 12 here carry 2 to 3 rings against the QED top 12's 2 to 12, so it is not simply
+that these are more fused.
+
 ## Step 3b — Pretrain the encoder on ZINC (AttrMask)
 
 Here rather than at the end: the checkpoint initializes both the Step 4 regressor
@@ -621,6 +668,73 @@ fine-tuning on another is a total, silent waste.
 - A linear probe from frozen embeddings to logP beats the same probe on a
   randomly-initialized encoder. Cheap, and the first real evidence pretraining did
   anything.
+
+### Three decisions taken here
+
+**The mask is an all-zero atom feature row, not a mask column.** A dedicated "masked"
+column would widen the encoder's input by one, and an encoder the RL network cannot load
+is the exact failure this step exists to avoid. The all-zero row also turns the leak test
+from a statistical one into an exact one: two lone masked atoms of different elements
+have no neighbours and identical inputs, so their logits are equal bit for bit, and the
+assertion is `torch.equal` rather than an accuracy near chance.
+
+**The target is the element, and the head is one linear layer.** A deeper head can name
+a masked atom from a representation the encoder never had to make chemical sense of, and
+it is the encoder that gets kept.
+
+**Masking does not hide the atom's degree.** Its bonds stay in the edge list, so the
+number of them and their types still reach it. That is the task working as intended —
+degree is context — and it is why the shuffled-context control below lands above the
+prior on accuracy: knowing an atom has four single bonds says carbon without knowing
+anything else about the molecule.
+
+### Measured
+
+10 epochs over 249,455 ZINC molecules, 5000 held out, seed 0, 409 s
+(`runs/pretrain_zinc.csv`, drawn in `runs/pretrain_curve.png`). Masked-element
+cross-entropy on held-out molecules **0.181** against a marginal prior of **0.896**,
+accuracy **0.929** against the prior's 0.736. The checkpoint is
+`models/zinc_encoder.pt` — 43,456 parameters, 183 KB, with the featurization hash
+inside it.
+
+One pass does most of the work: held-out loss is 0.226 after epoch 1 and 0.181 after
+epoch 10, and accuracy moves 0.914 to 0.929 over those nine further epochs.
+
+The control behaves: the same molecules with the same atoms masked, atom features dealt
+out to random positions, score 0.894 at epoch 10 against the prior's 0.896, and 0.78 to
+0.89 across the ten epochs. The task depends on the neighbourhood. Its accuracy stays
+at 0.81 against the prior's 0.736, which is the degree leak named above, visible.
+
+**Frozen probes say the representation got worse. Fine-tuning says the initialization
+got better.** Both were measured, and they disagree, so both are here.
+
+Linear maps from frozen mean-pooled embeddings to seven RDKit properties, fitted on 2500
+held-out molecules and scored on 2500 more, pretrained against randomly initialized:
+Crippen logP 0.605 against 0.574 — and then six losses. Rotatable bonds 0.298 against
+0.786. Molecular weight 0.300 against 0.626. TPSA 0.544 against 0.746. Aromatic rings
+0.822 against 0.921. QED 0.168 against 0.270. Fraction sp3 0.941 against 0.976.
+
+Fine-tuned, the order reverses. A stand-in for the Step 4 regressor — the encoder plus a
+64-unit head, all weights trainable, 3500 held-out molecules to train on and 1500 to
+score, everything identical between the two runs except the encoder's starting weights —
+gives the pretrained encoder every one of four comparisons. Crippen logP test MAE 0.239
+against 0.360 at seed 0 and 0.302 against 0.506 at seed 1; QED 0.0753 against 0.0848 and
+0.0795 against 0.0845.
+
+The reading: AttrMask pushes node embeddings toward what its own task needs, which is
+local chemical identity, and a mean pool of that carries less linearly readable size and
+polarity than a random projection of the raw atom features does. A frozen linear probe
+measures the pooled representation. What this step produces is a starting point for
+gradient descent. Those are different questions, and only the second one is the one the
+project asks — so the probe stays in the code as a cheap sanity check and stops being
+the evidence.
+
+What is still not established is the part that matters. Those proxies are ZINC molecules
+with computed labels, one distribution, noise-free targets. Step 4's regressor is
+BindingDB compounds with measured pIC50 — 5-10k points, a different distribution, a
+target with real assay noise — and it re-runs this comparison against the from-scratch
+null. Step 8 runs it for the RL agent, where `train_dqn.py --pretrained-encoder` is
+already wired and tested.
 
 ## Step 4 — BindingDB pIC50 regressor
 

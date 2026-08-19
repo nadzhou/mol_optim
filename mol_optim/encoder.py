@@ -32,7 +32,12 @@ class GraphEncoder(nn.Module):
         )
         self.activation = nn.ReLU()
 
-    def forward(self, batch: featurize.Batch) -> torch.Tensor:
+    def node_embeddings(self, batch: featurize.Batch) -> torch.Tensor:
+        """One vector per atom, before pooling — [total_atoms, hidden].
+
+        Split out of `forward` for the AttrMask pretraining at plan.md Step 3b, which
+        predicts a masked atom from its own embedding and never pools.
+        """
         h = self.activation(self.atom_embedding(batch.atom_features))  # [total_atoms, hidden]
         source, target = batch.edge_index[0], batch.edge_index[1]  # [total_edges] each
 
@@ -42,6 +47,10 @@ class GraphEncoder(nn.Module):
             )  # [total_edges, hidden]
             aggregated = torch.zeros_like(h).index_add_(0, target, messages)
             h = self.activation(update_layer(torch.cat([h, aggregated], dim=-1)))
+        return h
+
+    def forward(self, batch: featurize.Batch) -> torch.Tensor:
+        h = self.node_embeddings(batch)  # [total_atoms, hidden]
 
         # Mean pool. Sum would make the embedding grow with the molecule and swamp the
         # per-atom signal; the atom count reaches the network as a graph feature instead.
