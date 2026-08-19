@@ -1,0 +1,11 @@
+[project]
+name = "mol-optim"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["rdkit", "torch", "numpy"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = ["slow: needs a training run; excluded from the per-commit suite"]
+filterwarnings = ["error::UserWarning"]

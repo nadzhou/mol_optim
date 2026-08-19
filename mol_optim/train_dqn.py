@@ -1,0 +1,251 @@
+"""DQN on the molecule MDP — the whole training step, flat and in order.
+
+Reads top to bottom: enumerate candidates, score them, act, store, update. The
+reference splits the update across a helper that loops over the batch in Python; here
+it is one batched forward pass, inline, where the shapes are visible.
+"""
+
+import time
+from pathlib import Path
+
+import numpy as np
+import torch
+
+from mol_optim import (
+    config,
+    determinism,
+    dqn,
+    environment,
+    featurize,
+    graph_key,
+    replay_buffer,
+    report,
+    results,
+    rewards,
+)
+
+
+def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
+    """Piecewise linear: epsilon_start -> epsilon_mid at half the run -> epsilon_end.
+
+    The published schedule (run_dqn.py PiecewiseSchedule). The PyTorch port instead
+    multiplies epsilon by 0.99907 per episode, a schedule whose endpoint depends on how
+    many episodes you happen to run.
+    """
+    halfway = cfg.episodes / 2
+    if episode_index < halfway:
+        return cfg.epsilon_start + (cfg.epsilon_mid - cfg.epsilon_start) * (
+            episode_index / halfway
+        )
+    return cfg.epsilon_mid + (cfg.epsilon_end - cfg.epsilon_mid) * min(
+        (episode_index - halfway) / halfway, 1.0
+    )
+
+
+def train(
+    cfg: config.Config,
+    log_path: Path | None = None,
+    checkpoint_path: Path | None = None,
+    report_every: int = 0,
+) -> results.Run:
+    determinism.seed_everything(cfg.seed)
+    rng = np.random.default_rng(cfg.seed)
+    device = torch.device("cpu")
+
+    online_dqn = dqn.MolDQN(cfg.fingerprint_length + 1).to(device)
+    target_dqn = dqn.MolDQN(cfg.fingerprint_length + 1).to(device)
+    target_dqn.load_state_dict(online_dqn.state_dict())
+    for parameter in target_dqn.parameters():
+        parameter.requires_grad = False
+    optimizer = torch.optim.Adam(online_dqn.parameters(), lr=cfg.learning_rate)
+    buffer = replay_buffer.ReplayBuffer(cfg.replay_buffer_size, rng)
+
+    log_file = open(log_path, "w") if log_path is not None else None
+    if log_file is not None:
+        log_file.write("episode,reward,mean_loss,epsilon,graph_hash\n")
+
+    episode_rewards: list[float] = []
+    episode_molecules: list = []
+    total_steps = 0
+    started = time.perf_counter()
+
+    for episode_index in range(cfg.episodes):
+        epsilon = epsilon_at_episode(episode_index, cfg)
+        episode = environment.reset(cfg)
+        episode_losses: list[float] = []
+        # Carried across the loop: this step's next-state candidates are the next
+        # step's candidates, and fingerprinting them twice is the whole cost of a step.
+        packed = featurize.packed_candidates(
+            episode.valid_actions, cfg
+        )  # [num_candidates, fingerprint_length // 8]
+
+        while True:
+            steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
+            observations = featurize.observations(
+                packed, steps_remaining, cfg
+            )  # [num_candidates, fingerprint_length + 1]
+
+            if rng.random() < epsilon:
+                choice = int(rng.integers(len(episode.valid_actions)))
+            else:
+                with torch.no_grad():
+                    q_candidates = online_dqn(
+                        torch.from_numpy(observations).to(device)
+                    )  # [num_candidates, 1]
+                choice = int(torch.argmax(q_candidates))
+
+            result = environment.step(episode, choice, rewards.qed, cfg)
+            next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
+            next_packed = featurize.packed_candidates(episode.valid_actions, cfg)
+            buffer.push(
+                state=packed[choice],
+                state_steps_remaining=steps_remaining,
+                reward=result.reward,
+                next_candidates=next_packed,
+                next_steps_remaining=next_steps_remaining,
+                done=result.terminated,
+            )
+            packed = next_packed
+            total_steps += 1
+
+            if total_steps % cfg.update_interval == 0 and len(buffer) >= cfg.batch_size:
+                for _ in range(cfg.updates_per_interval):
+                    batch = buffer.sample(cfg.batch_size)
+
+                    q_taken = online_dqn(
+                        torch.from_numpy(
+                            featurize.observations(
+                                batch.states, batch.state_steps_remaining, cfg
+                            )
+                        ).to(device)
+                    ).squeeze(-1)  # [batch]
+
+                    # The target is a max over each next state's *candidate set*, and
+                    # those sets have different sizes. Stack them all into one forward
+                    # pass, then segment-max back down to [batch].
+                    owner = torch.from_numpy(
+                        np.concatenate(
+                            [
+                                np.full(len(candidate_set), i, dtype=np.int64)
+                                for i, candidate_set in enumerate(batch.next_candidates)
+                            ]
+                        )
+                    ).to(device)  # [total_candidates]
+                    next_observations = np.concatenate(
+                        [
+                            featurize.observations(candidate_set, steps, cfg)
+                            for candidate_set, steps in zip(
+                                batch.next_candidates, batch.next_steps_remaining
+                            )
+                        ]
+                    )  # [total_candidates, fingerprint_length + 1]
+
+                    with torch.no_grad():
+                        q_next = target_dqn(
+                            torch.from_numpy(next_observations).to(device)
+                        ).squeeze(-1)  # [total_candidates]
+                        best_next = torch.zeros(
+                            cfg.batch_size, device=device
+                        ).scatter_reduce(
+                            0, owner, q_next, reduce="amax", include_self=False
+                        )  # [batch]
+                        not_done = 1.0 - torch.from_numpy(batch.dones).to(device)
+                        q_target = (
+                            torch.from_numpy(batch.rewards).to(device)
+                            + cfg.gamma * not_done * best_next
+                        )  # [batch]
+
+                    # Mean squared error. The reference uses Huber, which flattens
+                    # the gradient once the TD error passes 1.0; with rewards in [0, 1]
+                    # that clip almost never engages anyway, and gradient clipping below
+                    # already bounds the step size.
+                    loss = ((q_taken - q_target) ** 2).mean()
+
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        online_dqn.parameters(), cfg.grad_clip_norm
+                    )
+                    optimizer.step()
+                    episode_losses.append(float(loss.detach()))
+
+                    with torch.no_grad():
+                        for parameter, target_parameter in zip(
+                            online_dqn.parameters(), target_dqn.parameters()
+                        ):
+                            target_parameter.mul_(cfg.polyak)
+                            target_parameter.add_((1.0 - cfg.polyak) * parameter)
+
+            if result.terminated:
+                break
+
+        episode_rewards.append(result.reward)
+        episode_molecules.append(result.state)
+        mean_loss = sum(episode_losses) / len(episode_losses) if episode_losses else 0.0
+
+        if log_file is not None:
+            log_file.write(
+                f"{episode_index},{result.reward:.6f},{mean_loss:.6f},"
+                f"{epsilon:.4f},{graph_key.canonical_hash(result.state)}\n"
+            )
+            log_file.flush()
+        if report_every and (episode_index + 1) % report_every == 0:
+            recent = episode_rewards[-report_every:]
+            elapsed = time.perf_counter() - started
+            print(
+                f"episode {episode_index + 1:5d}  "
+                f"mean reward {sum(recent) / len(recent):.4f}  "
+                f"loss {mean_loss:.5f}  eps {epsilon:.3f}  "
+                f"{total_steps / elapsed:.1f} steps/s",
+                flush=True,
+            )
+
+    if log_file is not None:
+        log_file.close()
+    if checkpoint_path is not None:
+        torch.save(
+            {
+                "config": cfg,
+                "online_dqn": online_dqn.state_dict(),
+                "target_dqn": target_dqn.state_dict(),
+            },
+            checkpoint_path,
+        )
+
+    return results.Run(
+        episode_rewards=tuple(episode_rewards),
+        episode_molecules=tuple(episode_molecules),
+        seconds=time.perf_counter() - started,
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--episodes", type=int, default=5000)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--log", type=Path, default=None)
+    parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument("--report-every", type=int, default=25)
+    parser.add_argument(
+        "--top-k", type=Path, default=None, help="stem for a top-k drawing and SDF"
+    )
+    args = parser.parse_args()
+
+    run = train(
+        config.Config(episodes=args.episodes, seed=args.seed),
+        log_path=args.log,
+        checkpoint_path=args.checkpoint,
+        report_every=args.report_every,
+    )
+    best_molecule, best_reward = run.best
+    print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
+    print(
+        f"best: {best_reward:.4f}  "
+        f"{best_molecule.GetNumHeavyAtoms()} heavy atoms  "
+        f"{graph_key.canonical_hash(best_molecule)}"
+    )
+    if args.top_k is not None:
+        report.top_k(run, args.top_k)
+        print(f"wrote {args.top_k}.png and {args.top_k}.sdf")
