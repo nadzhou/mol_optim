@@ -3,7 +3,11 @@
 import numpy as np
 import pytest
 
-from mol_optim import replay_buffer
+from mol_optim import featurize, replay_buffer
+from tests.molecules import NAMED
+
+ONE_GRAPH = featurize.graphs((NAMED["ethanol"],))
+TWO_GRAPHS = featurize.graphs((NAMED["aspirin"], NAMED["methane"]))
 
 
 def make_buffer(capacity: int) -> replay_buffer.ReplayBuffer:
@@ -12,10 +16,10 @@ def make_buffer(capacity: int) -> replay_buffer.ReplayBuffer:
 
 def push_numbered(buffer: replay_buffer.ReplayBuffer, value: int) -> None:
     buffer.push(
-        state=np.full(4, value, dtype=np.uint8),
+        state=ONE_GRAPH,
         state_steps_remaining=value,
         reward=float(value),
-        next_candidates=np.full((2, 4), value, dtype=np.uint8),
+        next_candidates=TWO_GRAPHS,
         next_steps_remaining=value - 1,
         done=False,
     )
@@ -43,13 +47,18 @@ def test_sampled_shapes_and_dtypes():
     for value in range(5):
         push_numbered(buffer, value)
     batch = buffer.sample(4)
-    assert batch.states.shape == (4, 4) and batch.states.dtype == np.uint8
+    assert len(batch.states) == 4
+    assert all(state.num_graphs == 1 for state in batch.states)
+    assert all(
+        state.atom_codes.shape == (3, len(featurize.ATOM_BLOCKS))
+        for state in batch.states
+    )
     assert batch.rewards.shape == (4,) and batch.rewards.dtype == np.float32
     assert batch.dones.shape == (4,) and batch.dones.dtype == np.float32
     assert batch.state_steps_remaining.shape == (4,)
     assert batch.next_steps_remaining.shape == (4,)
     assert len(batch.next_candidates) == 4
-    assert all(candidates.shape == (2, 4) for candidates in batch.next_candidates)
+    assert all(candidates.num_graphs == 2 for candidates in batch.next_candidates)
 
 
 def test_steps_remaining_stays_paired_with_its_transition():
@@ -64,11 +73,11 @@ def test_steps_remaining_stays_paired_with_its_transition():
 
 
 def test_stored_transitions_do_not_alias_the_caller_array():
-    # Real bug: the training loop reuses its candidate array, and a buffer that stored
-    # a view would silently rewrite its own history.
+    # RDKit molecules are mutable and so are the code arrays taken off them. A buffer
+    # holding a view would silently rewrite its own history.
     buffer = make_buffer(10)
-    state = np.ones(4, dtype=np.uint8)
-    next_candidates = np.ones((2, 4), dtype=np.uint8)
+    state = featurize.graphs((NAMED["ethanol"],))
+    next_candidates = featurize.graphs((NAMED["aspirin"], NAMED["methane"]))
     buffer.push(
         state=state,
         state_steps_remaining=5,
@@ -77,11 +86,11 @@ def test_stored_transitions_do_not_alias_the_caller_array():
         next_steps_remaining=4,
         done=False,
     )
-    state[:] = 99
-    next_candidates[:] = 99
+    state.atom_codes[:] = 99
+    next_candidates.atom_codes[:] = 99
     batch = buffer.sample(1)
-    assert np.all(batch.states == 1)
-    assert np.all(batch.next_candidates[0] == 1)
+    assert np.array_equal(batch.states[0].atom_codes, ONE_GRAPH.atom_codes)
+    assert np.array_equal(batch.next_candidates[0].atom_codes, TWO_GRAPHS.atom_codes)
 
 
 def test_sampling_is_deterministic_for_a_given_rng_seed():

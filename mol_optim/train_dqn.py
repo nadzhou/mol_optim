@@ -52,8 +52,8 @@ def train(
     rng = np.random.default_rng(cfg.seed)
     device = torch.device("cpu")
 
-    online_dqn = dqn.MolDQN(cfg.fingerprint_length + 1).to(device)
-    target_dqn = dqn.MolDQN(cfg.fingerprint_length + 1).to(device)
+    online_dqn = dqn.MolDQN(cfg).to(device)
+    target_dqn = dqn.MolDQN(cfg).to(device)
     target_dqn.load_state_dict(online_dqn.state_dict())
     for parameter in target_dqn.parameters():
         parameter.requires_grad = False
@@ -74,38 +74,33 @@ def train(
         episode = environment.reset(cfg)
         episode_losses: list[float] = []
         # Carried across the loop: this step's next-state candidates are the next
-        # step's candidates, and fingerprinting them twice is the whole cost of a step.
-        packed = featurize.packed_candidates(
-            episode.valid_actions, cfg
-        )  # [num_candidates, fingerprint_length // 8]
+        # step's candidates, and featurizing them twice is a large share of a step.
+        candidates = featurize.graphs(episode.valid_actions)  # num_candidates graphs
 
         while True:
             steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
-            observations = featurize.observations(
-                packed, steps_remaining, cfg
-            )  # [num_candidates, fingerprint_length + 1]
 
             if rng.random() < epsilon:
                 choice = int(rng.integers(len(episode.valid_actions)))
             else:
                 with torch.no_grad():
                     q_candidates = online_dqn(
-                        torch.from_numpy(observations).to(device)
+                        featurize.tensors(candidates, steps_remaining, cfg)
                     )  # [num_candidates, 1]
                 choice = int(torch.argmax(q_candidates))
 
             result = environment.step(episode, choice, rewards.qed, cfg)
             next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
-            next_packed = featurize.packed_candidates(episode.valid_actions, cfg)
+            next_candidates = featurize.graphs(episode.valid_actions)
             buffer.push(
-                state=packed[choice],
+                state=featurize.graphs((result.state,)),
                 state_steps_remaining=steps_remaining,
                 reward=result.reward,
-                next_candidates=next_packed,
+                next_candidates=next_candidates,
                 next_steps_remaining=next_steps_remaining,
                 done=result.terminated,
             )
-            packed = next_packed
+            candidates = next_candidates
             total_steps += 1
 
             if total_steps % cfg.update_interval == 0 and len(buffer) >= cfg.batch_size:
@@ -113,36 +108,33 @@ def train(
                     batch = buffer.sample(cfg.batch_size)
 
                     q_taken = online_dqn(
-                        torch.from_numpy(
-                            featurize.observations(
-                                batch.states, batch.state_steps_remaining, cfg
-                            )
-                        ).to(device)
+                        featurize.tensors(
+                            featurize.concatenate(batch.states),
+                            batch.state_steps_remaining,
+                            cfg,
+                        )
                     ).squeeze(-1)  # [batch]
 
                     # The target is a max over each next state's *candidate set*, and
                     # those sets have different sizes. Stack them all into one forward
                     # pass, then segment-max back down to [batch].
-                    owner = torch.from_numpy(
-                        np.concatenate(
-                            [
-                                np.full(len(candidate_set), i, dtype=np.int64)
-                                for i, candidate_set in enumerate(batch.next_candidates)
-                            ]
-                        )
-                    ).to(device)  # [total_candidates]
-                    next_observations = np.concatenate(
+                    set_sizes = np.array(
                         [
-                            featurize.observations(candidate_set, steps, cfg)
-                            for candidate_set, steps in zip(
-                                batch.next_candidates, batch.next_steps_remaining
-                            )
+                            candidate_set.num_graphs
+                            for candidate_set in batch.next_candidates
                         ]
-                    )  # [total_candidates, fingerprint_length + 1]
+                    )  # [batch]
+                    owner = torch.from_numpy(
+                        np.repeat(np.arange(cfg.batch_size), set_sizes)
+                    ).to(device)  # [total_candidates]
 
                     with torch.no_grad():
                         q_next = target_dqn(
-                            torch.from_numpy(next_observations).to(device)
+                            featurize.tensors(
+                                featurize.concatenate(batch.next_candidates),
+                                np.repeat(batch.next_steps_remaining, set_sizes),
+                                cfg,
+                            )
                         ).squeeze(-1)  # [total_candidates]
                         best_next = torch.zeros(
                             cfg.batch_size, device=device

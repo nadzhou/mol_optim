@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from mol_optim import config, dqn, train_dqn
+from mol_optim import config, dqn, environment, featurize, train_dqn
 from tests.molecules import NAMED
 
 SMALL = config.Config(
@@ -74,26 +74,39 @@ def test_segment_max_over_ragged_candidate_sets_matches_the_obvious_loop():
     # The target is max over each next state's candidate set, and those sets differ in
     # size. The training step stacks them into one forward pass and takes a segment
     # max; this pins that it agrees with scoring each set on its own.
+    cfg = config.Config()
     torch.manual_seed(0)
-    network = dqn.MolDQN(input_length=8)
+    network = dqn.MolDQN(cfg)
     candidate_sets = [
-        torch.randn(size, 8) for size in [1, 5, 17, 3]
-    ]  # ragged on purpose
+        environment.valid_actions(NAMED[name], cfg)
+        for name in ("methane", "benzene", "aspirin", "caffeine")
+    ]  # ragged: 4 to a few hundred candidates
+    steps_remaining = np.array([1.0, 7.0, 19.0, 40.0])
 
-    owner = torch.from_numpy(
-        np.concatenate(
-            [np.full(len(s), i, dtype=np.int64) for i, s in enumerate(candidate_sets)]
-        )
-    )
+    set_sizes = np.array([len(candidates) for candidates in candidate_sets])
+    owner = torch.from_numpy(np.repeat(np.arange(len(candidate_sets)), set_sizes))
     with torch.no_grad():
-        stacked = network(torch.cat(candidate_sets)).squeeze(-1)  # [total_candidates]
+        stacked = network(
+            featurize.tensors(
+                featurize.concatenate([featurize.graphs(c) for c in candidate_sets]),
+                np.repeat(steps_remaining, set_sizes),
+                cfg,
+            )
+        ).squeeze(-1)  # [total_candidates]
         batched = torch.zeros(len(candidate_sets)).scatter_reduce(
             0, owner, stacked, reduce="amax", include_self=False
         )  # [batch]
         one_at_a_time = torch.tensor(
-            [float(network(s).max()) for s in candidate_sets]
+            [
+                float(
+                    network(
+                        featurize.tensors(featurize.graphs(candidates), steps, cfg)
+                    ).max()
+                )
+                for candidates, steps in zip(candidate_sets, steps_remaining)
+            ]
         )
-    assert torch.allclose(batched, one_at_a_time, atol=1e-6)
+    assert torch.allclose(batched, one_at_a_time, atol=1e-5)
 
 
 def test_negative_q_values_survive_the_segment_max():

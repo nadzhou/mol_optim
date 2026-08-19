@@ -3,9 +3,9 @@
 RL molecular derivatization. Design and build order: [plan.md](plan.md). Coding style:
 [CLAUDE.md](CLAUDE.md).
 
-Current position: Step 1. Atom-level graph edits, Morgan-fingerprint state encoder, QED
-reward. The state is an RDKit molecular graph end to end — molecules become text only in
-`report.py`, where a person looks at them.
+Current position: Step 2. Atom-level graph edits, GNN state encoder, QED reward. The
+state is an RDKit molecular graph end to end — molecules become text only in `report.py`,
+where a person looks at them.
 
 ## Setup
 
@@ -20,8 +20,8 @@ reward. The state is an RDKit molecular graph end to end — molecules become te
 .venv/bin/python -m pytest -m "not slow"
 ```
 
-71 tests, under 4 seconds. The full run adds two 5000-episode training runs and takes
-about 100 minutes.
+82 tests, under 4 seconds. The full run adds two 5000-episode training runs and a
+step-latency measurement.
 
 ## Runs
 
@@ -42,10 +42,11 @@ about 100 minutes.
 | `config.py` | every hyperparameter, one frozen dataclass, passed explicitly |
 | `graph_key.py` | the state key: a canonical name taken off the graph, no SMILES |
 | `environment.py` | the MDP: candidate enumeration by RWMol edits, `step` |
-| `featurize.py` | Morgan fingerprint + steps remaining (Step 2 replaces this with a GNN) |
+| `featurize.py` | molecular graph to network tensors: int8 codes, one-hot at the network |
+| `encoder.py` | the GNN: message passing over atoms and bonds, mean pooled |
 | `rewards.py` | QED today, the pIC50 regressor at Step 5 |
 | `replay_buffer.py` | ours; ragged, because the target is a max over a candidate set |
-| `dqn.py` | the Q network |
+| `dqn.py` | the Q network: the encoder plus a head that reads steps remaining |
 | `train_dqn.py` | the training loop, flat |
 | `baseline_random.py` | tier 0 of the ladder — the number DQN has to beat |
 | `molio.py` | SDF in and out; the only place a graph becomes bytes |

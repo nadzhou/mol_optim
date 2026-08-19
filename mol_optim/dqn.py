@@ -1,24 +1,31 @@
-"""Q network for Step 1: five explicit layers, no cleverness (MolDQN's dqn.py)."""
+"""The Q network: the GNN encoder plus a head that also reads the graph-level features."""
 
 import torch
 import torch.nn as nn
 
+from mol_optim import config, encoder, featurize
+
 
 class MolDQN(nn.Module):
-    """Scores one candidate molecule: [batch, input_length] -> [batch, 1]."""
+    """Scores candidate molecules: a batch of graphs -> [num_graphs, 1].
 
-    def __init__(self, input_length: int):
+    One scalar per candidate, no fixed-size action head — the action space is the
+    candidate set the environment enumerates, and it changes size every step.
+    """
+
+    def __init__(self, cfg: config.Config):
         super().__init__()
-        self.linear_1 = nn.Linear(input_length, 1024)
-        self.linear_2 = nn.Linear(1024, 512)
-        self.linear_3 = nn.Linear(512, 128)
-        self.linear_4 = nn.Linear(128, 32)
-        self.linear_5 = nn.Linear(32, 1)
+        self.encoder = encoder.GraphEncoder(cfg.hidden_dim, cfg.num_message_passing_layers)
+        # Steps remaining joins the *pooled* embedding, not the atom features: it is a
+        # property of the episode, not of any atom.
+        self.linear_1 = nn.Linear(cfg.hidden_dim + featurize.NUM_GRAPH_FEATURES, 128)
+        self.linear_2 = nn.Linear(128, 32)
+        self.linear_3 = nn.Linear(32, 1)
         self.activation = nn.ReLU()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: featurize.Batch) -> torch.Tensor:
+        embedded = self.encoder(batch)  # [num_graphs, hidden]
+        x = torch.cat([embedded, batch.graph_features], dim=-1)  # [num_graphs, hidden + 2]
         x = self.activation(self.linear_1(x))
         x = self.activation(self.linear_2(x))
-        x = self.activation(self.linear_3(x))
-        x = self.activation(self.linear_4(x))
-        return self.linear_5(x)  # [batch, 1]
+        return self.linear_3(x)  # [num_graphs, 1]

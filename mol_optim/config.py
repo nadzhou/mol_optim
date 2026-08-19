@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    """Every knob for the Step 1 atom-level MolDQN reproduction on QED.
+    """Every knob for the atom-level MolDQN on QED, now with a GNN state encoder.
 
     Defaults follow Google's published configs/bootstrap_dqn.json, not
     MolDQN-pytorch/hyp.py. The PyTorch port quietly deviates from the published setup
@@ -29,9 +29,11 @@ class Config:
     # discount and is separate from gamma below.
     discount_factor: float = 0.9
 
-    # State encoder (Step 1: Morgan fingerprint + steps remaining; Step 2 replaces this)
-    fingerprint_length: int = 2048
-    fingerprint_radius: int = 3
+    # State encoder (Step 2: a GNN over the molecular graph). The published MolDQN
+    # numbers below were tuned against a 2049 -> 1024 -> 512 -> 128 -> 32 -> 1 MLP over
+    # a Morgan fingerprint; this encoder is ~90x smaller in parameters.
+    hidden_dim: int = 64
+    num_message_passing_layers: int = 3
 
     # Agent. gamma is 1.0 because the environment already discounts by steps remaining;
     # a second discount here would charge the agent twice for taking its time.
