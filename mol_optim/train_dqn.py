@@ -14,6 +14,7 @@ import torch
 from rdkit import Chem
 
 from mol_optim import (
+    bindingdb,
     config,
     determinism,
     dqn,
@@ -25,7 +26,9 @@ from mol_optim import (
     replay_buffer,
     report,
     results,
+    reward_pic50,
     rewards,
+    seeds,
 )
 
 
@@ -234,9 +237,18 @@ if __name__ == "__main__":
     parser.add_argument("--report-every", type=int, default=25)
     parser.add_argument(
         "--reward",
-        choices=("qed", "gsk3b"),
+        choices=("qed", "gsk3b", "pic50"),
         default="qed",
-        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3",
+        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3; pic50 is Step 5",
+    )
+    parser.add_argument(
+        "--seed-molecule",
+        type=int,
+        default=None,
+        help="index into seeds.choose(); the molecule episodes start from",
+    )
+    parser.add_argument(
+        "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
     )
     parser.add_argument(
         "--top-k", type=Path, default=None, help="stem for a top-k drawing and SDF"
@@ -249,14 +261,27 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    init_mol = None
     if args.reward == "qed":
         reward_fn = rewards.qed
-    else:
+    elif args.reward == "gsk3b":
         forest = oracle_gsk3b.load()
         reward_fn = lambda mol: oracle_gsk3b.score(forest, mol)  # noqa: E731
+    else:
+        reward = reward_pic50.load(args.regressor)
+        # Divided by 10 to land in [0, 1], where the published learning rate and the MSE
+        # loss were tuned. Zero stays zero, so the domain filter still reads as "nothing".
+        reward_fn = lambda mol: reward_pic50.score(reward, mol) / 10.0  # noqa: E731
+        if args.seed_molecule is not None:
+            init_mol = seeds.choose(bindingdb.load())[args.seed_molecule].mol
+            print(
+                f"starting from seed {args.seed_molecule}: "
+                f"{init_mol.GetNumHeavyAtoms()} heavy atoms, "
+                f"reward {reward_fn(init_mol):.4f}"
+            )
 
     run = train(
-        config.Config(episodes=args.episodes, seed=args.seed),
+        config.Config(episodes=args.episodes, seed=args.seed, init_mol=init_mol),
         reward_fn,
         log_path=args.log,
         checkpoint_path=args.checkpoint,

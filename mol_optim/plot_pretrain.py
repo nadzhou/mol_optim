@@ -3,14 +3,10 @@
     .venv/bin/python -m mol_optim.plot_pretrain \
         runs/pretrain_zinc.csv --out runs/pretrain_curve.png
 
-Its own script rather than a flag on plot_run.py: a pretraining log and a DQN log share
-no columns, and one plotter with a branch for each would be two plotters sharing an
-argument parser.
+Its own script rather than a flag on plot_run.py: the two logs share no columns.
 
-Every reference line is read out of the log, not passed in. The prior — the loss of
-guessing ZINC's element distribution and never looking at the graph — is what says
-whether the run learned anything, and a baseline typed on the command line is a baseline
-that can be typed wrong.
+Reference lines are read out of the log, not passed in — a baseline typed on the command
+line is a baseline that can be typed wrong.
 """
 
 import argparse
@@ -40,8 +36,8 @@ if __name__ == "__main__":
         2, 1, figsize=(10, 7), sharex=True, height_ratios=[2, 1]
     )
 
-    # Train is a mean over the epoch's batches and held-out is measured once at the end
-    # of it, which is why the first epoch's train loss sits above its held-out loss.
+    # Train is a mean over the epoch, held-out is measured at the end of it — which is
+    # why epoch 1's train loss sits above its held-out loss.
     loss_axes.plot(
         epochs,
         column("train_loss"),

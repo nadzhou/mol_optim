@@ -1,20 +1,12 @@
 """AttrMask pretraining on ZINC: mask atoms, name them from the graph around them.
 
-plan.md Step 3b. One checkpoint initializes both the RL encoder (Step 2) and the pIC50
-regressor (Step 4), so what the encoder learns here about local chemical context is
-what both start from instead of inferring it from 5-10k labelled points.
+plan.md Step 3b. One checkpoint initializes both the RL encoder and the pIC50 regressor.
 
-The mask is an all-zero atom feature row. That choice is the whole design:
-
-- It carries nothing. No element, no charge, no hydrogen count, no ring flags. The AttrMask
-  bug is a mask the head can see through, and it does not look like a bug — the loss
-  falls, the curve is beautiful, and the encoder has learned to copy one input column.
-- It does not widen the input. A dedicated mask *column* would make the pretrained
-  encoder a different shape from the RL encoder, and the checkpoint would not load.
-
-What survives masking is the atom's own bond count and the bonds' own features, because
-those live on the edges. That is the task working as intended — degree is context — and
-it is why the shuffled-context control below does not fall all the way to the prior.
+The mask is an all-zero atom feature row, and that is the design. It carries nothing —
+the AttrMask bug is a mask the head can see through, which looks like a beautiful loss
+curve — and it does not widen the input, so the RL encoder can still load the checkpoint.
+What survives masking is the atom's bond count, since that lives on the edges: intended,
+and why the shuffled-context control does not fall all the way to the prior.
 """
 
 import dataclasses
@@ -34,11 +26,10 @@ NUM_ELEMENTS = len(featurize.ATOM_TYPES) + 1  # the featurization's "other" buck
 
 
 class MaskedAtomPredictor(nn.Module):
-    """The pretraining network: the shared GNN encoder, plus one linear element head.
+    """The shared encoder plus one linear element head.
 
-    The head is deliberately one layer. Anything deeper can name a masked atom from a
-    representation the encoder did not have to make chemical sense of, and it is the
-    encoder that gets kept.
+    One layer deliberately: anything deeper can name the atom from a representation the
+    encoder never had to make chemical sense of, and it is the encoder that gets kept.
     """
 
     def __init__(self, cfg: config.Config):
@@ -85,8 +76,7 @@ def masked(
 ) -> tuple[featurize.Batch, np.ndarray]:
     """The batch the encoder reads, with `fraction` of atom feature rows zeroed.
 
-    Steps remaining is 0.0 because there is no episode here. It reaches the DQN head
-    and never the encoder, and the encoder is all this trains.
+    Steps remaining is 0.0: no episode here, and it reaches the DQN head, not the encoder.
     """
     num_atoms = len(graph_set.atom_codes)
     rows = rng.choice(num_atoms, size=max(1, round(fraction * num_atoms)), replace=False)
@@ -100,12 +90,10 @@ def masked(
 def with_shuffled_atoms(
     graph_set: featurize.Graphs, rng: np.random.Generator
 ) -> featurize.Graphs:
-    """The control: the same bonds, every atom's features dealt to a random position.
+    """The control: same bonds, every atom's features dealt to a random position.
 
-    Structure survives, chemistry does not. A model that reads the neighbourhood loses
-    what the neighbourhood was telling it, so held-out loss on these graphs is the
-    number that says the task depends on context at all. It does not reach the prior:
-    an atom's bond count and its bonds' types still arrive through its edges.
+    Structure survives, chemistry does not, so the loss here says whether the task
+    depends on context. It stays under the prior because degree still arrives by edge.
     """
     permutation = rng.permutation(len(graph_set.atom_codes))
     return dataclasses.replace(graph_set, atom_codes=graph_set.atom_codes[permutation])
@@ -118,11 +106,9 @@ def holdout_split(
 ) -> tuple[tuple[Chem.Mol, ...], tuple[Chem.Mol, ...]]:
     """(training, held out), by a seeded shuffle rather than a cut of file order.
 
-    ZINC's order is arbitrary but it is not random, and a block from one end of the file
-    could be a block from one supplier. Takes the generator rather than seeding its own,
-    so anything that has to reproduce a finished run's held-out molecules — the
-    fine-tuning comparison in finetune_zinc.py — passes a generator freshly seeded with
-    pretrain_cfg.seed and gets the same split without re-running the pretraining.
+    ZINC's order is not random — a block from one end could be one supplier. Takes the
+    generator rather than seeding its own, so finetune_zinc.py can reproduce a finished
+    run's held-out molecules without re-running the pretraining.
     """
     order = rng.permutation(len(molecules))
     return (
@@ -140,11 +126,9 @@ def measure(
 ) -> Measurement:
     """Masked-element loss and accuracy, no gradient.
 
-    `truth_sets` carries the answers and `context_sets` the features the encoder reads.
-    They are the same list for the ordinary measurement; the control passes
-    with_shuffled_atoms(...) as the context. Each batch's rng is seeded from its
-    position, so both measurements mask the same atoms and the two numbers compare atom
-    for atom.
+    `truth_sets` carries the answers, `context_sets` the features the encoder reads —
+    the same list normally, shuffled context for the control. Each batch's rng is seeded
+    from its position, so both mask the same atoms and the numbers compare directly.
     """
     total_loss, total_correct, total_masked = 0.0, 0, 0
     for index, (truth, context) in enumerate(zip(truth_sets, context_sets)):
@@ -167,12 +151,10 @@ def measure(
 
 
 def marginal(train_codes: np.ndarray, holdout_codes: np.ndarray) -> Measurement:
-    """The reference: guess the training set's element distribution, ignore the graph.
+    """The reference: guess the training element distribution, ignore the graph.
 
-    ZINC is 73.6% carbon, so accuracy alone flatters any model; this is the loss a
-    pretraining run has to beat to have learned anything at all. Counts start at one so
-    an element that appears only in the held-out set costs a large number rather than
-    an infinite one.
+    ZINC is 73.6% carbon, so accuracy flatters any model; this loss is what a run has to
+    beat. Counts start at one so an unseen element costs a large number, not infinity.
     """
     counts = np.bincount(train_codes[:, 0], minlength=NUM_ELEMENTS) + 1
     probabilities = counts / counts.sum()  # [NUM_ELEMENTS]
@@ -191,9 +173,8 @@ def logp_probe(
 ) -> float:
     """R^2 of a least-squares line from frozen embeddings to Crippen logP, on test.
 
-    The cheap first evidence that pretraining did anything (plan.md Step 3b): the same
-    probe on a randomly initialized encoder is the number to beat. Frozen means frozen —
-    the only fitted parameters are the hidden_dim + 1 weights of the linear map.
+    A sanity check, not evidence — Step 4 settled the pretraining question. The only
+    fitted parameters are the hidden_dim + 1 weights of the linear map.
     """
 
     def embeddings(mols: Sequence[Chem.Mol]) -> np.ndarray:
@@ -246,10 +227,8 @@ def save_encoder(
 def load_encoder(path: Path, cfg: config.Config) -> dict[str, torch.Tensor]:
     """The pretrained encoder weights, or a loud failure.
 
-    A checkpoint that silently does not load is the most common reason pretraining
-    "doesn't help", and a checkpoint that loads into a different featurization is worse:
-    every weight lands on a column that means something else. Both are refused here,
-    which is why the featurization hash is written into the file.
+    A checkpoint that silently does not load is the usual reason pretraining "doesn't
+    help"; one that loads against another featurization is worse. Both refused here.
     """
     if not path.exists():
         raise FileNotFoundError(
@@ -294,18 +273,15 @@ def pretrain(
             "leaves nothing to train on"
         )
 
-    # The held-out set is measured every epoch, so it is featurized once. The training
-    # molecules are featurized per batch: 0.13 ms each against a 23 ms training step,
-    # and it keeps one array per batch alive instead of one per molecule.
+    # Held-out is featurized once, training per batch: 0.13 ms a molecule against a
+    # 23 ms step, and one array alive per batch instead of one per molecule.
     holdout_sets = [
         featurize.graphs(holdout_molecules[start : start + pretrain_cfg.batch_size])
         for start in range(0, len(holdout_molecules), pretrain_cfg.batch_size)
     ]
     control_sets = [with_shuffled_atoms(graph_set, rng) for graph_set in holdout_sets]
-    # The element histogram is read off 5000 training molecules rather than all of them:
-    # that is 115k atoms, which pins carbon, nitrogen and oxygen — the three that carry
-    # almost all of the loss — to better than a tenth of a percent, and featurizing 249k
-    # molecules here would cost more than the first epoch.
+    # 5000 molecules is 115k atoms, which pins C, N and O to a tenth of a percent;
+    # featurizing all 249k here would cost more than the first epoch.
     prior = marginal(
         featurize.graphs(train_molecules[:5000]).atom_codes,
         np.concatenate([graph_set.atom_codes for graph_set in holdout_sets]),
@@ -329,16 +305,14 @@ def pretrain(
     control_measurements: list[Measurement] = []
     started = time.perf_counter()
 
-    # Shuffled in place once per epoch, so each epoch reshuffles the previous epoch's
-    # order — the same sequence of draws the run was measured with.
+    # Shuffled in place, so each epoch reshuffles the last one's order.
     epoch_order = np.arange(len(train_molecules))
 
     for epoch in range(pretrain_cfg.epochs):
         rng.shuffle(epoch_order)
         batch_losses: list[float] = []
 
-        # A short final batch is dropped: the mask fraction is a rounding of the batch's
-        # atom count, and a tenth-size batch would carry a tenth-size vote on the epoch.
+        # Short final batch dropped: the mask fraction rounds off the batch's atom count.
         last_start = len(train_molecules) - pretrain_cfg.batch_size
         for start in range(0, last_start + 1, pretrain_cfg.batch_size):
             graph_set = featurize.graphs(

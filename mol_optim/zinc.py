@@ -2,17 +2,12 @@
 
     python -m mol_optim.zinc
 
-That downloads TDC's `zinc.tab` — 249,455 drug-like ZINC molecules, the same 250k set
-the MolDQN and JT-VAE papers use — checks it against the hash pinned below, and reads
-every record once to confirm RDKit can build a molecule from it.
+Downloads TDC's `zinc.tab` — 249,455 drug-like molecules, the 250k set the MolDQN and
+JT-VAE papers use — checks the pinned hash, and reads every record once.
 
-This is the one place in the project where a molecule arrives as text, and it arrives
-that way because ZINC is published that way. The line is the same one fetch_gsk3b.py
-draws: a foreign format is read at the edge, and what the rest of the code sees is
-graphs. Nothing downstream of `molecules()` handles a SMILES string.
-
-The file is 12 MB and stays out of version control; the URL and the hash are here, and
-between them they say exactly which molecules the checkpoint was pretrained on.
+Molecules arrive as text here because ZINC is published that way; nothing downstream of
+`molecules()` handles a SMILES string. The 12 MB file stays out of version control, and
+the URL and hash below say exactly which molecules the checkpoint was pretrained on.
 """
 
 import hashlib
@@ -28,11 +23,10 @@ DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "zinc.tab"
 
 
 def molecules(path: Path = DATA_PATH, limit: int | None = None) -> tuple[Chem.Mol, ...]:
-    """The first `limit` ZINC molecules, in file order. Takes about 10 s for all of them.
+    """The first `limit` ZINC molecules, in file order. About 10 s for all of them.
 
-    File order is arbitrary but fixed, so a prefix is a reproducible subset. The split
-    into training and held-out molecules is a seeded shuffle in pretrain.py, not a cut
-    of this order.
+    File order is arbitrary but fixed, so a prefix is reproducible. The train/held-out
+    split is a seeded shuffle in pretrain.py, not a cut of this order.
     """
     if not path.exists():
         raise FileNotFoundError(
@@ -49,8 +43,7 @@ def molecules(path: Path = DATA_PATH, limit: int | None = None) -> tuple[Chem.Mo
                 continue
             mol = Chem.MolFromSmiles(record)
             if mol is None:
-                # All 249,455 records parse today. One that does not means the file
-                # changed under the pinned hash, which cannot happen quietly.
+                # All 249,455 parse today; a failure means the pinned file changed.
                 raise ValueError(f"RDKit could not read {record!r} in {path}")
             mols.append(mol)
             if limit is not None and len(mols) == limit:

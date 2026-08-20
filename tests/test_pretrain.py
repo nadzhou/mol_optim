@@ -12,7 +12,6 @@ The learning tests train, so they are slow: a run is the only way to see a loss 
 import numpy as np
 import pytest
 import torch
-from rdkit import Chem
 
 from mol_optim import config, dqn, environment, featurize, pretrain, zinc
 
