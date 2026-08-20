@@ -111,6 +111,26 @@ def with_shuffled_atoms(
     return dataclasses.replace(graph_set, atom_codes=graph_set.atom_codes[permutation])
 
 
+def holdout_split(
+    molecules: Sequence[Chem.Mol],
+    pretrain_cfg: config.PretrainConfig,
+    rng: np.random.Generator,
+) -> tuple[tuple[Chem.Mol, ...], tuple[Chem.Mol, ...]]:
+    """(training, held out), by a seeded shuffle rather than a cut of file order.
+
+    ZINC's order is arbitrary but it is not random, and a block from one end of the file
+    could be a block from one supplier. Takes the generator rather than seeding its own,
+    so anything that has to reproduce a finished run's held-out molecules — the
+    fine-tuning comparison in finetune_zinc.py — passes a generator freshly seeded with
+    pretrain_cfg.seed and gets the same split without re-running the pretraining.
+    """
+    order = rng.permutation(len(molecules))
+    return (
+        tuple(molecules[i] for i in order[pretrain_cfg.num_holdout :]),
+        tuple(molecules[i] for i in order[: pretrain_cfg.num_holdout]),
+    )
+
+
 def measure(
     model: MaskedAtomPredictor,
     truth_sets: Sequence[featurize.Graphs],
@@ -267,12 +287,8 @@ def pretrain(
     determinism.seed_everything(pretrain_cfg.seed)
     rng = np.random.default_rng(pretrain_cfg.seed)
 
-    # A seeded shuffle, not a cut of file order: the file's order is arbitrary but it is
-    # not random, and a held-out block from one end could be a block of one supplier.
-    order = rng.permutation(len(molecules))
-    holdout_index = order[: pretrain_cfg.num_holdout]
-    train_index = order[pretrain_cfg.num_holdout :]
-    if len(train_index) == 0:
+    train_molecules, holdout_molecules = holdout_split(molecules, pretrain_cfg, rng)
+    if len(train_molecules) == 0:
         raise ValueError(
             f"{len(molecules)} molecules and num_holdout={pretrain_cfg.num_holdout} "
             "leaves nothing to train on"
@@ -282,10 +298,8 @@ def pretrain(
     # molecules are featurized per batch: 0.13 ms each against a 23 ms training step,
     # and it keeps one array per batch alive instead of one per molecule.
     holdout_sets = [
-        featurize.graphs(
-            [molecules[i] for i in holdout_index[start : start + pretrain_cfg.batch_size]]
-        )
-        for start in range(0, len(holdout_index), pretrain_cfg.batch_size)
+        featurize.graphs(holdout_molecules[start : start + pretrain_cfg.batch_size])
+        for start in range(0, len(holdout_molecules), pretrain_cfg.batch_size)
     ]
     control_sets = [with_shuffled_atoms(graph_set, rng) for graph_set in holdout_sets]
     # The element histogram is read off 5000 training molecules rather than all of them:
@@ -293,7 +307,7 @@ def pretrain(
     # almost all of the loss — to better than a tenth of a percent, and featurizing 249k
     # molecules here would cost more than the first epoch.
     prior = marginal(
-        featurize.graphs([molecules[i] for i in train_index[:5000]]).atom_codes,
+        featurize.graphs(train_molecules[:5000]).atom_codes,
         np.concatenate([graph_set.atom_codes for graph_set in holdout_sets]),
     )
 
@@ -315,16 +329,23 @@ def pretrain(
     control_measurements: list[Measurement] = []
     started = time.perf_counter()
 
+    # Shuffled in place once per epoch, so each epoch reshuffles the previous epoch's
+    # order — the same sequence of draws the run was measured with.
+    epoch_order = np.arange(len(train_molecules))
+
     for epoch in range(pretrain_cfg.epochs):
-        rng.shuffle(train_index)
+        rng.shuffle(epoch_order)
         batch_losses: list[float] = []
 
         # A short final batch is dropped: the mask fraction is a rounding of the batch's
         # atom count, and a tenth-size batch would carry a tenth-size vote on the epoch.
-        last_start = len(train_index) - pretrain_cfg.batch_size
+        last_start = len(train_molecules) - pretrain_cfg.batch_size
         for start in range(0, last_start + 1, pretrain_cfg.batch_size):
             graph_set = featurize.graphs(
-                [molecules[i] for i in train_index[start : start + pretrain_cfg.batch_size]]
+                [
+                    train_molecules[i]
+                    for i in epoch_order[start : start + pretrain_cfg.batch_size]
+                ]
             )
             batch, rows = masked(graph_set, pretrain_cfg.mask_fraction, rng, cfg)
             elements = graph_set.atom_codes[rows, 0].astype(np.int64)
@@ -369,7 +390,7 @@ def pretrain(
 
     return Result(
         model=model,
-        holdout_molecules=tuple(molecules[i] for i in holdout_index),
+        holdout_molecules=holdout_molecules,
         train_losses=tuple(train_losses),
         holdout=tuple(holdout_measurements),
         control=tuple(control_measurements),

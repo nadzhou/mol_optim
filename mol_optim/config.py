@@ -77,3 +77,23 @@ class PretrainConfig:
     # not a moving Q target that a large step can push away from itself.
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
+
+
+@dataclass(frozen=True)
+class RegressorConfig:
+    """Every knob for the BindingDB pIC50 regressor, plan.md Step 4.
+
+    Passed alongside Config for the same reason PretrainConfig is: the encoder's shape
+    lives in one place, so the ZINC checkpoint, the RL encoder and this regressor are
+    built from one set of numbers and the checkpoint loads into all three.
+    """
+
+    seed: int = 0
+    test_fraction: float = 0.2
+    epochs: int = 60
+    batch_size: int = 128
+    learning_rate: float = 1e-3
+    grad_clip_norm: float = 10.0
+    # Five networks, different seeds, same data. The mean is the prediction and the
+    # spread is what Step 5 subtracts to stay pessimistic where the model is guessing.
+    ensemble_size: int = 5

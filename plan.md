@@ -714,10 +714,10 @@ Crippen logP 0.605 against 0.574 — and then six losses. Rotatable bonds 0.298 
 0.786. Molecular weight 0.300 against 0.626. TPSA 0.544 against 0.746. Aromatic rings
 0.822 against 0.921. QED 0.168 against 0.270. Fraction sp3 0.941 against 0.976.
 
-Fine-tuned, the order reverses. A stand-in for the Step 4 regressor — the encoder plus a
-64-unit head, all weights trainable, 3500 held-out molecules to train on and 1500 to
-score, everything identical between the two runs except the encoder's starting weights —
-gives the pretrained encoder every one of four comparisons. Crippen logP test MAE 0.239
+Fine-tuned, the order reverses. A stand-in for the Step 4 regressor (`finetune_zinc.py`)
+— the encoder plus a 64-unit head, all weights trainable, 3500 held-out molecules to
+train on and 1500 to score, everything identical between the two runs except the
+encoder's starting weights — gives the pretrained encoder every one of four comparisons. Crippen logP test MAE 0.239
 against 0.360 at seed 0 and 0.302 against 0.506 at seed 1; QED 0.0753 against 0.0848 and
 0.0795 against 0.0845.
 
@@ -731,10 +731,11 @@ the evidence.
 
 What is still not established is the part that matters. Those proxies are ZINC molecules
 with computed labels, one distribution, noise-free targets. Step 4's regressor is
-BindingDB compounds with measured pIC50 — 5-10k points, a different distribution, a
-target with real assay noise — and it re-runs this comparison against the from-scratch
-null. Step 8 runs it for the RL agent, where `train_dqn.py --pretrained-encoder` is
-already wired and tested.
+BindingDB compounds with measured pIC50 — 10,850 points, a different distribution, a
+target with real assay noise — and it re-ran this comparison against the from-scratch
+null. It came out the same way: test MAE 0.806 against 0.868, Spearman 0.642 against
+0.582. See [Step 4, Measured](#measured-2). Step 8 runs it for the RL agent, where
+`train_dqn.py --pretrained-encoder` is already wired and tested.
 
 ## Step 4 — BindingDB pIC50 regressor
 
@@ -785,6 +786,104 @@ def test_pic50_conversion(ic50_nm, expected):
 ```
 nM / µM / M confusion is endemic in BindingDB and shifts every reward by a
 constant. Hand-compute these.
+
+### Decisions taken here
+
+**BindingDB's own dated snapshot, not TDC's processed copy.** TDC publishes a
+`bindingdb_ic50.csv` on the same Harvard dataverse as the GSK3β oracle and ZINC, which
+would have been the consistent choice, and it hands back a bare nanomolar number. The
+qualifier is gone. A row recorded as ">10000 nM" — the assay ran off the end of its
+range and nobody found the number — arrives as 10000, becomes a pIC50 of 5.0, and is
+indistinguishable from a real measurement of 10 µM. There are 5,720 such rows for EGFR
+against 23,461 usable ones. So: `BindingDB_All_202608_tsv.zip`, 593 MB, pinned by the
+MD5 BindingDB publishes beside it, and 9 GB of TSV streamed once.
+
+**One construct, not one UniProt id.** P00533 covers 51 distinct EGFR constructs in this
+snapshot. Wild type is 16,512 of the rows; the rest are T790M, L858R, C797S and
+truncations. Pooling them puts one compound's wild-type and T790M numbers under one
+label, and telling those apart is the entire purpose of a third-generation EGFR
+inhibitor.
+
+**A second, stereo-aware key.** `graph_key.canonical_hash` stays constitutional and
+stays the RL loop's name for a state. `stereo_hash` separates configurations and is what
+the dataset deduplicates and splits on, because two enantiomers here are two compounds
+with two measured IC50 values. It cost one real bug to get right: a double bond with
+undefined geometry reads back from a molblock as STEREOANY where a SMILES said
+STEREONONE, and both mean "nobody said", so 185 of 10,855 compounds changed name on the
+trip to disk. Five macrocycles change name even with that fixed — their geometry does
+not survive being drawn in two dimensions — and the ingest reads its own output back,
+finds them, and drops them rather than leaving the leakage tests unable to reason.
+
+**The split is three ways, and validation comes out of training by scaffold.** Train and
+test by scaffold; the training half scaffold-split again for the epoch to stop at.
+Choosing that epoch on the test set is the oldest way to report a number that does not
+survive contact with new data.
+
+**Seeds are chosen here, not in the RL run, because the split has to know about them.**
+Largest active scaffold clusters first, then two filters that came from reading what it
+picked without them: the representative must have more than one measurement agreeing
+within a log — the first pick otherwise had a 2.73-log spread across five measurements,
+and the final report quotes each seed's own pIC50 — and a cluster is skipped if its
+representative is within 0.6 Tanimoto of a seed already taken, because two of the first
+five differed only in where a ring nitrogen sat.
+
+### Measured
+
+**The dataset.** 3,234,499 rows scanned, 23,209 of them EGFR wild type on a single
+chain. 4,465 qualified values dropped, 1 unusable, 1 unreadable, 5 dropped for changing
+name on the way to disk. What comes out is **10,850 compounds**, pIC50 1.60 to 11.52,
+2,709 of them measured more than once, across 3,861 Bemis-Murcko scaffolds — the largest
+holding 576 compounds and 2,527 holding one.
+
+**The labels argue with each other.** Among compounds measured more than once the median
+spread is 0.56 log units, and 822 of the 2,709 disagree by more than a log. The worst is
+8.54 — the same compound, the same target, eight orders of magnitude apart. That number
+is the floor the regressor is working against, and it is why the error below should be
+read next to 0.28, the half-width of a typical repeated label, rather than next to zero.
+
+**The regressor.** Five networks, scaffold split 7,378 / 1,302 / 2,170 with the five seed
+scaffolds held out of training, early stopping on validation, 11 minutes a run
+(`runs/regressor.png`).
+
+| | pretrained on ZINC | random init | training mean |
+|---|---|---|---|
+| test MAE | **0.806** | 0.868 | 1.138 |
+| test RMSE | **1.052** | 1.117 | — |
+| test Spearman | **0.642** | 0.582 | — |
+| single models, MAE | 0.828 ± 0.017 | 0.883 ± 0.004 | — |
+
+**Step 3b's question, answered on measured data: pretraining helps.** 0.806 against 0.868
+MAE and 0.642 against 0.582 Spearman, and every member of the pretrained ensemble beat
+every member of the other on validation. This is the comparison the ZINC probes could
+not settle — different distribution, real assay noise, a target nobody computed from the
+graph — and it lands the same way the ZINC fine-tuning proxy did.
+
+Model error against label noise: MAE is 0.777 on the 489 test compounds with repeated
+measurements and 0.814 on the 1,681 with one. On the 233 whose repeats agree within 0.5
+it is 0.760. So the noisy labels are not where the error is; the model is about 2.5x the
+label half-width across the board, and the scatter shows why — predictions compress into
+6 to 8.5 while measurements run 2 to 11.
+
+### The guardrails Step 5 assumes, measured before Step 5 leans on them
+
+The right two panels of `runs/regressor.png` test the two mitigations
+[Reward](#the-failure-mode-to-design-around) specifies, and they do not come out equal.
+
+**Ensemble disagreement barely predicts error.** Rank correlation 0.08. Mean absolute
+error is 0.70 to 0.86 across the bottom eight deciles of disagreement and only rises in
+the top two, to 0.97. `reward - λ·std` as written would spend most of its effect on
+noise. As a gate on the top decile it would do something; as a linear penalty it is
+mostly decoration.
+
+**Distance from the training set does predict it.** Rank correlation -0.21, and the
+decile curve falls monotonically: mean error 1.146 for the tenth of test compounds whose
+nearest training neighbour is at Tanimoto 0.41, against 0.653 for the tenth sitting at
+0.94. The applicability domain is the guardrail with support behind it, and Step 5
+should lean on it rather than on the ensemble spread.
+
+Neither result excuses the third mitigation. Reward clipping near the best measured
+affinity costs nothing and needs no evidence to justify: there is no molecule ten logs
+better than everything known.
 
 ## Step 5 — Swap regressor in as reward; add guardrails
 

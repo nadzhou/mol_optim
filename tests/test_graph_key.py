@@ -82,3 +82,65 @@ def test_normalize_is_idempotent():
         assert graph_key.canonical_hash(graph_key.normalize(once)) == (
             graph_key.canonical_hash(once)
         )
+
+
+def with_chirality(mol: Chem.Mol, atom_index: int, tag: Chem.ChiralType) -> Chem.Mol:
+    """The same graph with one centre's configuration set, built by editing the graph."""
+    edited = Chem.RWMol(mol)
+    edited.GetAtomWithIdx(atom_index).SetChiralTag(tag)
+    rebuilt = edited.GetMol()
+    Chem.SanitizeMol(rebuilt)
+    Chem.AssignStereochemistry(rebuilt, cleanIt=True, force=True)
+    return rebuilt
+
+
+def test_the_stereo_key_separates_two_configurations_and_the_state_key_merges_them():
+    # Sorbitol's C2 is a real stereocentre and the fixture leaves it unassigned. The two
+    # assignments are two compounds with two measured IC50 values in BindingDB, and one
+    # state for an action space that cannot set a centre.
+    clockwise = with_chirality(NAMED["sorbitol"], 2, Chem.ChiralType.CHI_TETRAHEDRAL_CW)
+    anticlockwise = with_chirality(
+        NAMED["sorbitol"], 2, Chem.ChiralType.CHI_TETRAHEDRAL_CCW
+    )
+    assert graph_key.stereo_hash(clockwise) != graph_key.stereo_hash(anticlockwise)
+    assert graph_key.canonical_hash(clockwise) == graph_key.canonical_hash(anticlockwise)
+
+
+def test_the_stereo_key_separates_an_assigned_centre_from_an_unassigned_one():
+    # "Configuration unknown" is not the same compound as either configuration, and a
+    # dataset that merges them averages a measurement with something else.
+    unassigned = NAMED["sorbitol"]
+    assigned = with_chirality(unassigned, 2, Chem.ChiralType.CHI_TETRAHEDRAL_CW)
+    assert graph_key.stereo_hash(assigned) != graph_key.stereo_hash(unassigned)
+
+
+@pytest.mark.parametrize("mol", START_MOLECULES, ids=lambda m: m.GetProp("_Name"))
+def test_the_stereo_key_survives_a_molblock_round_trip(mol):
+    # The invariant the BindingDB dataset is built on: 10,850 compounds are named by
+    # this key, written to an SDF, and read back by the regressor. A key that moves in
+    # transit makes "this compound is in both splits" unanswerable.
+    rebuilt = Chem.MolFromMolBlock(Chem.MolToMolBlock(mol))
+    assert graph_key.stereo_hash(rebuilt) == graph_key.stereo_hash(mol)
+
+
+def test_an_undefined_double_bond_has_one_name_however_it_is_said():
+    # STEREONONE from a SMILES, STEREOANY from a molblock, both meaning "nobody said".
+    # Left alone this renamed 185 of the EGFR compounds on their way to disk.
+    mol = graph_key.normalize(NAMED["aspirin"])
+    either = Chem.RWMol(mol)
+    for bond in either.GetBonds():
+        if bond.GetBondType() == Chem.BondType.DOUBLE:
+            bond.SetStereo(Chem.BondStereo.STEREOANY)
+    assert graph_key.stereo_hash(either.GetMol()) == graph_key.stereo_hash(mol)
+
+
+def test_the_scaffold_key_groups_a_series_and_splits_two_frames():
+    # What a scaffold split groups on: same ring system and linkers, different
+    # substituents. Aspirin and paracetamol are both one benzene ring, so they share a
+    # scaffold; caffeine's fused purine is another frame.
+    assert graph_key.scaffold_hash(NAMED["aspirin"]) == graph_key.scaffold_hash(
+        NAMED["paracetamol"]
+    )
+    assert graph_key.scaffold_hash(NAMED["aspirin"]) != graph_key.scaffold_hash(
+        NAMED["caffeine"]
+    )
