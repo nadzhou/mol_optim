@@ -44,23 +44,6 @@ episodes fall below 0.5 against 1.2%. It is also narrower, 302 distinct molecule
 Top 12 of each run, GNN first. Still nonsense, and one aminooxazole motif repeats across
 most of the GNN's twelve.
 
-## Step 3 — TDC's GSK3β oracle
-
-DQN **0.610** final mean against a random floor of **0.077**, best single molecule 0.66 at
-28 heavy atoms, 7653 s.
-
-![GSK3B learning curve](step3-gsk3b-oracle/gsk3b_curve.png)
-
-The curve climbs the whole way: 0.090 over the first 500 episodes, 0.413 over episodes
-2000–2500, 0.584 over the last 500. For scale, 3000 ZINC molecules average 0.029 on this
-oracle and the best of the 3000 scores 0.51.
-
-![GSK3B top molecules](step3-gsk3b-oracle/dqn_gnn_gsk3b_top.png)
-
-All 12 share one core: two or three aminopyrazoles joined by NH bridges. Aminopyrazoles
-really do hinge-bind, so the oracle is not being fooled by noise — it is being fooled by a
-real motif repeated past the point of plausibility. How it gets gamed is the finding.
-
 ## Step 3b — Masked-atom pretraining on ZINC
 
 Held-out masked-element cross-entropy **0.181** against a marginal prior of **0.896**;

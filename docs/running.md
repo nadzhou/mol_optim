@@ -7,19 +7,19 @@ Runs write into `runs/`, which is not tracked; the plots worth keeping are copie
 ## Train the agent
 
 ```bash
-python -m mol_optim.train_dqn --episodes 5000 --reward gsk3b \
+python -m mol_optim.train_dqn --episodes 5000 --reward qed \
   --log runs/dqn.csv --checkpoint runs/dqn.pt --top-k runs/dqn_top
 ```
 
-`--reward qed` is the Step 1 and 2 target; `--reward gsk3b` is Step 3's oracle.
-`baseline_random.py` takes the same flag and gives you the number to beat. `--top-k`
-writes the best distinct molecules as a drawing and an SDF. `--pretrained-encoder
-models/zinc_encoder.pt` starts from the pretrained encoder rather than a random one.
+`--reward qed` scores drug-likeness; `--reward pic50` scores with the fitted EGFR
+regressor. `baseline_random.py` takes the same flag and gives you the number to beat.
+`--top-k` writes the best distinct molecules as a drawing and an SDF.
+`--pretrained-encoder models/zinc_encoder.pt` starts from the pretrained encoder rather
+than a random one.
 
-5000 episodes took 93 minutes with the fingerprint encoder on QED, 147 with the GNN on
-QED, and 128 with the GNN on the GSK3B oracle. Throughput falls over a run — about 70
-steps/s down to 23 — because the agent builds larger molecules and the candidate sets
-grow with them.
+5000 episodes took 93 minutes with the fingerprint encoder on QED and 147 with the GNN
+on QED. Throughput falls over a run — about 70 steps/s down to 23 — because the agent
+builds larger molecules and the candidate sets grow with them.
 
 ## Pretrain the encoder
 
@@ -55,6 +55,6 @@ python -m mol_optim.plot_regressor models/egfr_regressor.pt --out runs/regressor
 ## Tests
 
 ```bash
-pytest -m "not slow"   # 177 tests, about 17 seconds
-pytest                 # adds four 5000-episode runs and a ZINC pretraining run
+pytest -m "not slow"   # 166 tests, about 15 seconds
+pytest                 # adds two 5000-episode runs and a ZINC pretraining run
 ```

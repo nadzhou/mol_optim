@@ -25,7 +25,6 @@ for why there are no wrapper classes, no config globals, and no training framewo
 | File | What it is |
 |---|---|
 | `rewards.py` | QED, the Step 1 and Step 2 target |
-| `oracle_gsk3b.py` | the Step 3 reward: TDC's GSK3B random forest, walked by hand |
 | `reward_pic50.py` | the Step 5 reward: the regressor, behind three guardrails |
 
 ## Data and the pIC50 model
@@ -45,10 +44,8 @@ for why there are no wrapper classes, no config globals, and no training framewo
 
 | File | What it is |
 |---|---|
-| `fetch_gsk3b.py` | TDC's pickle in, `models/gsk3b_forest.npz` out |
 | `zinc.py` | ZINC 250k in, molecular graphs out |
 | `fetch_bindingdb.py` | BindingDB's 9 GB table in, one target's compounds out |
-| `fetch_structure.py` | a PDB entry in, a Vina-ready receptor out |
 
 ## Looking at the output
 
@@ -57,7 +54,6 @@ for why there are no wrapper classes, no config globals, and no training framewo
 | `molio.py` | SDF in and out; the only place a graph becomes bytes |
 | `report.py` | top-k molecules as a drawing and an SDF |
 | `audit.py` | what the agent built: motif counts and whether the scaffold survived |
-| `docking.py` | AutoDock Vina against a prepared receptor — measured not to rank here |
 | `plot_run.py` | reward and loss curves from a run log |
 | `plot_pretrain.py` | loss and accuracy curves from a pretraining log |
 | `plot_regressor.py` | predicted against measured, and whether disagreement predicts error |

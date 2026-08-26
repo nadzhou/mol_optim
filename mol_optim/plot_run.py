@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ylabel",
         default="terminal reward",
-        help="what the reward is: QED at Step 2, the GSK3B oracle at Step 3",
+        help="what the reward is: QED, or predicted pIC50",
     )
     parser.add_argument(
         "--random-baseline",

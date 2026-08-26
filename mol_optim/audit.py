@@ -1,10 +1,11 @@
 """What did the agent actually build? Substructure counts over a run's molecules.
 
-plan.md Steps 3 and 5 both ended the same way: a reward curve that climbs, and a top-k
-of molecules no chemist would order. Step 3 found hemiaminals, Step 5 found chains of
-catenated nitrogen, and the Step 5 motifs were found by looking at a drawing after the
-Step 3 motif list came back empty. So the list is a record of what has been found, not a
-guarantee of what is there — when a new run scores well, look at the picture too.
+Every run so far has ended the same way: a reward curve that climbs, and a top-k of
+molecules no chemist would order. The descriptor scorers found hemiaminals, the pIC50
+regressor found chains of catenated nitrogen, and those were found by looking at a
+drawing after the earlier motif list came back empty. So the list is a record of what
+has been found, not a guarantee of what is there — when a new run scores well, look at
+the picture too.
 
 Pure: a molecule in, counts out. Nothing here reads a file or holds state.
 """
@@ -15,15 +16,15 @@ from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
 # Each entry is a structure that has actually turned up in a run of this project, with
-# the step that produced it. Aromatic rings are excluded where the aromatic form is
+# the reward that produced it. Aromatic rings are excluded where the aromatic form is
 # ordinary chemistry — a pyrazole is not a hydrazine.
 MOTIFS: dict[str, Chem.Mol] = {
-    # Step 3, the GSK3B oracle run: falls apart in water.
+    # From the descriptor-scored runs: these fall apart in water.
     "hemiaminal": Chem.MolFromSmarts("[#7][#6X4][OX2H1]"),
     "aminal": Chem.MolFromSmarts("[#7][#6X4][#7]"),
     "gem-diol": Chem.MolFromSmarts("[OX2H1][#6X4][OX2H1]"),
     "N-hydroxyl": Chem.MolFromSmarts("[#7][OX2H1]"),
-    # Step 5, the pIC50 regressor run: hydrazines and longer polyazanes.
+    # From the pIC50 regressor run: hydrazines and longer polyazanes.
     "N-N": Chem.MolFromSmarts("[#7;!a]-[#7;!a]"),
     "N-N-N": Chem.MolFromSmarts("[#7;!a]-[#7;!a]-[#7;!a]"),
 }

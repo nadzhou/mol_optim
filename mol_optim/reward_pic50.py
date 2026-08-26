@@ -18,7 +18,6 @@ from rdkit.Chem import rdFingerprintGenerator
 
 from mol_optim import bindingdb, config, regressor
 
-# Not shared with oracle_gsk3b's generator, which is pinned to TDC's featurization.
 MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
 

@@ -24,7 +24,6 @@ import matplotlib.pyplot as plt
 
 from mol_optim import bindingdb, regressor, seeds, splits
 
-# Not shared with oracle_gsk3b's generator, which is pinned to TDC's featurization.
 MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
 if __name__ == "__main__":

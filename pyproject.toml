@@ -17,9 +17,6 @@ dependencies = ["rdkit", "torch", "numpy", "matplotlib"]
 
 [project.optional-dependencies]
 dev = ["pytest", "hypothesis"]
-# Docking only. Kept optional because it is an evaluation tool that never runs in the
-# training loop, and because vina has no wheel everywhere — see docs/docking.md.
-docking = ["vina", "meeko", "scipy", "gemmi"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
