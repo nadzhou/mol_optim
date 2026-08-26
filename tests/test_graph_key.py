@@ -50,8 +50,8 @@ def test_hash_is_the_same_for_a_graph_rebuilt_atom_by_atom(mol):
 def test_the_key_is_constitutional_so_stereoisomers_share_it():
     # Pinning a known limitation, not endorsing it. The atom-level action space cannot
     # create a stereocentre, and ranking without chirality is what keeps the key stable
-    # across an SDF round trip. Step 4 brings in real inhibitors and this must change
-    # then — when it does, this test fails and asks to be rewritten.
+    # across an SDF round trip. Real inhibitors with stereocentres would force this to
+    # change — when they do, this test fails and asks to be rewritten.
     assert graph_key.canonical_hash(NAMED["alanine_L"]) == graph_key.canonical_hash(
         NAMED["alanine_D"]
     )

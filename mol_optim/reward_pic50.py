@@ -1,9 +1,11 @@
 """The pIC50 regressor as the RL reward, with guardrails.
 
-An agent optimizing a surrogate finds its mistakes — Step 3 built hemiaminals against a
+An agent optimizing a surrogate finds its mistakes — the descriptor-scored runs built
+hemiaminals against a
 published model. Three guardrails fire in order: zero the reward below `domain_floor`
 Tanimoto to the training set, subtract `pessimism` x ensemble spread, clip at the most
-potent training compound. Step 4 measured the domain as the one with evidence (error
+potent training compound. The regressor's own evaluation measured the domain as the
+one with evidence (error
 1.15 at Tanimoto 0.41 against 0.65 at 0.94) and disagreement as nearly flat (0.08).
 """
 
@@ -40,7 +42,7 @@ def load(
 ) -> Reward:
     """The ensemble, plus the training set it is allowed to have opinions near.
 
-    domain_floor 0.3 sits below Step 4's least-similar test decile (0.41), so it zeroes
+    domain_floor 0.3 sits below the least-similar test decile (0.41), so it zeroes
     only molecules further out than anything the reported MAE describes.
     """
     if not checkpoint_path.exists():

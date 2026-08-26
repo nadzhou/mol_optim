@@ -6,7 +6,7 @@ sharing is the point.
 
 Message passing is written out rather than taken from torch_geometric: the aggregation
 is one `index_add_`, the pooling is another, and both are deterministic on CPU —
-PyG's scatter kernels are not, which is exactly what Step 0 warns about.
+PyG's scatter kernels are not, which is exactly the nondeterminism seeding cannot fix.
 """
 
 import torch

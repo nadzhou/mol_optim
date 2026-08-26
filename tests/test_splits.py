@@ -36,7 +36,7 @@ def test_scaffold_disjoint(split):
 
 
 def test_seed_scaffolds_are_held_out_of_training(compounds):
-    # Step 5 starts the agent from seed molecules, and the regressor must not already
+    # The agent starts from seed molecules, and the regressor must not already
     # know their series. Held out here by scaffold, not by molecule: an analog of a seed
     # in the training set is the same leak one bond removed.
     seeds = tuple(compounds[i] for i in (0, 7, 30, 100, 500))

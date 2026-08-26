@@ -262,7 +262,7 @@ if __name__ == "__main__":
         "--pretrained-encoder",
         type=Path,
         default=None,
-        help="a ZINC AttrMask checkpoint from mol_optim.pretrain, Step 3b",
+        help="a ZINC AttrMask checkpoint from mol_optim.pretrain",
     )
     args = parser.parse_args()
 

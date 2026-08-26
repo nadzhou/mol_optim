@@ -60,11 +60,11 @@ Then the whole pipeline, from download to figures:
 ./run_all.sh
 ```
 
-That is about 3.5 hours, most of it the agent. Each fetch is pinned by checksum, so a
-silently changed upstream file fails loudly instead of quietly moving your numbers. Runs
-write into `runs/`, which is not tracked; the plots worth keeping are copied into
-`results/`. [docs/running.md](docs/running.md) breaks the script into its five steps with
-timings, and explains the flags worth changing.
+About 25 minutes of compute, plus a 605 MB download the first time. Each fetch is
+pinned by checksum, so a silently changed upstream file fails loudly instead of quietly
+moving your numbers. Runs write into `runs/`, which is not tracked; the plots worth
+keeping are copied into `results/`. [docs/running.md](docs/running.md) breaks the script
+into its five steps with timings, and explains the flags worth changing.
 
 ## Where things are
 

@@ -106,7 +106,7 @@ if __name__ == "__main__":
         "--pretrained-encoder",
         type=Path,
         default=None,
-        help="the ZINC checkpoint from Step 3b; omitted means random init, the null",
+        help="the ZINC pretraining checkpoint; omitted means random init, the null",
     )
     parser.add_argument("--report-every", type=int, default=0)
     args = parser.parse_args()
@@ -183,7 +183,7 @@ if __name__ == "__main__":
                 "regressor_config": regressor_cfg,
                 "featurization": featurize.signature(),
                 "pretrained_encoder": str(args.pretrained_encoder),
-                # Step 5's applicability domain needs to know what this was fitted on.
+                # The reward's applicability domain needs to know what this was fitted on.
                 "train_keys": [
                     compound.mol.GetProp("_Name") for compound in train_compounds
                 ],

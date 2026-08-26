@@ -38,7 +38,7 @@ def state_dicts_equal(first, second) -> bool:
 
 
 def test_a_pretrained_encoder_reaches_the_training_loop(tmp_path):
-    # Step 3b's checkpoint is worth nothing if it does not arrive here. batch_size above
+    # The pretrained checkpoint is worth nothing if it does not arrive here. batch_size above
     # anything the buffer can hold means no gradient step runs, so the checkpoint this
     # run writes is its initialization, and the encoder in it should be the pretrained
     # one weight for weight.

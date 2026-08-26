@@ -1,4 +1,4 @@
-"""Step 0. Everything below this is untrustworthy without it."""
+"""Seeding. Every measurement in this repo is untrustworthy without it."""
 
 from mol_optim import (
     baseline_random,

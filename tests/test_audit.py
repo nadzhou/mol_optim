@@ -35,10 +35,10 @@ def test_each_motif_fires_on_its_own_molecule(name, motif):
 
 def test_an_aromatic_nitrogen_nitrogen_bond_is_not_a_hydrazine():
     # The distinction the N-N motif exists to make: a pyrazole is ordinary chemistry and
-    # appears throughout the vocabulary, a hydrazine is what Step 5 built.
+    # appears throughout the vocabulary, a hydrazine is what the pIC50 run built.
     pyrazole = audit.audit(MOTIF_MOLECULES["pyrazole"])
     assert pyrazole.motif_counts["N-N"] == 0
-    # ...but the bond is still counted, because the Step 5 audit came back clean the
+    # ...but the bond is still counted, because that audit came back clean the
     # first time by looking only at the SMARTS.
     assert pyrazole.num_nitrogen_nitrogen_bonds == 1
 

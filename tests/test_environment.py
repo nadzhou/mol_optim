@@ -1,4 +1,4 @@
-"""Step 1 environment invariants.
+"""Environment invariants.
 
 The action space is the foundation: if it emits an invalid graph, everything downstream
 is garbage, and nothing crashes when it does. Random *action sequences* are where the

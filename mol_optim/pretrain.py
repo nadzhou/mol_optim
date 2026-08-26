@@ -173,7 +173,8 @@ def logp_probe(
 ) -> float:
     """R^2 of a least-squares line from frozen embeddings to Crippen logP, on test.
 
-    A sanity check, not evidence — Step 4 settled the pretraining question. The only
+    A sanity check, not evidence — the pIC50 regressor settled the pretraining
+    question. The only
     fitted parameters are the hidden_dim + 1 weights of the linear map.
     """
 

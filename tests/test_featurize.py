@@ -1,4 +1,4 @@
-"""The Step 2 state encoder's input: codes in the buffer, one-hot at the network."""
+"""The state encoder's input: codes in the buffer, one-hot at the network."""
 
 import numpy as np
 import pytest

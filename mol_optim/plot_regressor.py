@@ -4,7 +4,8 @@
         models/egfr_regressor.pt --out runs/regressor.png
 
 Four panels: predicted against measured with the RL seeds marked, calibration by decile,
-and the two guardrails Step 5 is built on — ensemble disagreement against actual error,
+and the two guardrails the reward is built on — ensemble disagreement against actual
+error,
 and nearest-neighbour Tanimoto against the same error. Either guardrail coming out flat
 means it is decoration. The calibration panel is the one that says what the reward can
 and cannot express.

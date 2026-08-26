@@ -1,4 +1,4 @@
-"""Step 3b: masked-atom pretraining on ZINC.
+"""Masked-atom pretraining on ZINC.
 
 Two failure modes here produce a beautiful loss curve and a worthless encoder, and
 nothing else in the suite notices either one. A mask the head can see through makes the

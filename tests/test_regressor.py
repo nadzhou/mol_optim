@@ -59,7 +59,7 @@ def test_the_ensemble_reports_the_mean_and_the_disagreement(compounds):
 
     assert prediction.mean == pytest.approx(columns.mean(axis=0), abs=1e-5)
     assert prediction.spread == pytest.approx(columns.std(axis=0), abs=1e-5)
-    # Differently initialized networks must actually disagree, or the spread that Step 5
+    # Differently initialized networks must actually disagree, or the spread the reward
     # subtracts as uncertainty is a column of zeros.
     assert prediction.spread.mean() > 0.0
 

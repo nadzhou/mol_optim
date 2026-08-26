@@ -45,7 +45,7 @@ def test_episode_terminates_at_exactly_max_steps():
 
 def test_the_reward_function_is_what_the_environment_calls():
     # The reward arrives as an argument, not as a subclass override. Swapping it is how
-    # Step 5 puts the pIC50 regressor in.
+    # the pIC50 regressor gets put in.
     cfg = config.Config(init_mol=ASPIRIN, max_steps_per_episode=1, discount_factor=0.9)
     episode = environment.reset(cfg)
     result = environment.step(episode, 0, lambda mol: 7.0, cfg)

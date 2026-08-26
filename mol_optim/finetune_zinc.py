@@ -7,7 +7,8 @@ linear map, and loses on six of seven properties. This measures the question tha
 matters — is the checkpoint a better place to start gradient descent — with the pIC50
 regressor's shape in miniature: two runs identical but the encoder's starting weights.
 
-A proxy: ZINC molecules, RDKit labels, no assay noise. Step 4 ran the real comparison on
+A proxy: ZINC molecules, RDKit labels, no assay noise. The pIC50 regressor ran the real
+comparison on
 BindingDB pIC50 and it came out the same way.
 """
 

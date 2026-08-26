@@ -39,7 +39,7 @@ class Audit:
     num_nitrogens: int
     # Nitrogen bonded to nitrogen, aromatic or not. Counted separately from the N-N
     # motif because a fused triazine's contiguous NH read as aromatic and the SMARTS
-    # misses them, which is how the Step 5 audit came back clean the first time.
+    # misses them, which is how that audit came back clean the first time.
     num_nitrogen_nitrogen_bonds: int
     scaffold_intact: bool | None  # None when no scaffold was given to check against
 

@@ -29,7 +29,7 @@ class Config:
     # discount and is separate from gamma below.
     discount_factor: float = 0.9
 
-    # State encoder (Step 2: a GNN over the molecular graph). The published MolDQN
+    # State encoder: a GNN over the molecular graph. The published MolDQN
     # numbers below were tuned against a 2049 -> 1024 -> 512 -> 128 -> 32 -> 1 MLP over
     # a Morgan fingerprint, 2.7M parameters against this network's 56k.
     hidden_dim: int = 64
@@ -95,5 +95,5 @@ class RegressorConfig:
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
     # Five networks, different seeds, same data. The mean is the prediction and the
-    # spread is what Step 5 subtracts to stay pessimistic where the model is guessing.
+    # spread is what the reward subtracts to stay pessimistic where the model guesses.
     ensemble_size: int = 5

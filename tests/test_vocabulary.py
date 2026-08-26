@@ -35,7 +35,8 @@ def test_the_attachment_index_points_into_the_fragment(fragments):
 
 
 def test_no_fragment_carries_a_nitrogen_nitrogen_bond(fragments):
-    # The Step 5 finding, asserted. The agent put an N-N bond in 100% of its episodes
+    # The pIC50 run's finding, asserted. The agent put an N-N bond in 100% of its
+    # episodes
     # against a reward with no term for it; this is why it cannot do that here.
     for fragment in fragments:
         catenated = [

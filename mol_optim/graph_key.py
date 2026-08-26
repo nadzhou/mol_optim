@@ -23,7 +23,8 @@ apart, and ranking without chirality is what makes the key survive a trip throug
 — reading a molblock back re-perceives double-bond stereo from the coordinates, which
 otherwise shifts the canonical ranking and renames the molecule.
 
-Step 4 brought in real inhibitors, so there are now two keys. `canonical_hash` stays
+Real inhibitors brought stereochemistry in, so there are now two keys. `canonical_hash`
+stays
 constitutional and stays the RL loop's name for a state. `stereo_hash` separates
 stereoisomers, which the BindingDB dataset needs: two enantiomers there carry two
 different measured IC50 values.
