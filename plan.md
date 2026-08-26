@@ -786,7 +786,7 @@ anything else about the molecule.
 ### Measured
 
 10 epochs over 249,455 ZINC molecules, 5000 held out, seed 0, 409 s
-(`runs/pretrain_zinc.csv`, drawn in `runs/pretrain_curve.png`). Masked-element
+(`runs/pretrain_zinc.csv`, drawn in `results/step3b-zinc-pretraining/pretrain_curve.png`). Masked-element
 cross-entropy on held-out molecules **0.181** against a marginal prior of **0.896**,
 accuracy **0.929** against the prior's 0.736. The checkpoint is
 `models/zinc_encoder.pt` — 43,456 parameters, 183 KB, with the featurization hash
@@ -938,7 +938,7 @@ read next to 0.28, the half-width of a typical repeated label, rather than next 
 
 **The regressor.** Five networks, scaffold split 7,378 / 1,302 / 2,170 with the five seed
 scaffolds held out of training, early stopping on validation, 11 minutes a run
-(`runs/regressor.png`).
+(`results/step4-pic50-regressor/regressor.png`).
 
 | | pretrained on ZINC | random init | training mean |
 |---|---|---|---|
@@ -961,7 +961,7 @@ label half-width across the board, and the scatter shows why — predictions com
 
 ### The guardrails Step 5 assumes, measured before Step 5 leans on them
 
-The right two panels of `runs/regressor.png` test the two mitigations
+The right two panels of `results/step4-pic50-regressor/regressor.png` test the two mitigations
 [Reward](#the-failure-mode-to-design-around) specifies, and they do not come out equal.
 
 **Ensemble disagreement barely predicts error.** Rank correlation 0.08. Mean absolute
@@ -1046,7 +1046,7 @@ agent was allowed to optimize against it.
 ### Measured
 
 A pilot, not the deliverable: one seed, 1000 episodes, 6 edits, 292 s
-(`runs/pilot_pic50_seed0.csv`, drawn in `runs/pilot_pic50_seed0.png`). Seed 0 is a
+(`runs/pilot_pic50_seed0.csv`, drawn in `results/step5-pic50-pilot/pilot_pic50_seed0.png`). Seed 0 is a
 4-anilinoquinazoline — the gefitinib chemotype — 19 heavy atoms, measured pIC50 10.00,
 predicted 7.38, Tanimoto 0.72 to the nearest training compound.
 
