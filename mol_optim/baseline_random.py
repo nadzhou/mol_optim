@@ -17,7 +17,6 @@ from mol_optim import (
     determinism,
     environment,
     graph_key,
-    oracle_gsk3b,
     results,
     reward_pic50,
     rewards,
@@ -58,9 +57,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--reward",
-        choices=("qed", "gsk3b", "pic50"),
+        choices=("qed", "pic50"),
         default="qed",
-        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3; pic50 is Step 5",
+        help="qed is RDKit's drug-likeness score; pic50 is the fitted EGFR regressor",
     )
     parser.add_argument(
         "--seed-molecule",
@@ -82,9 +81,6 @@ if __name__ == "__main__":
     init_mol = None
     if args.reward == "qed":
         reward_fn = rewards.qed
-    elif args.reward == "gsk3b":
-        forest = oracle_gsk3b.load()
-        reward_fn = lambda mol: oracle_gsk3b.score(forest, mol)  # noqa: E731
     else:
         # Divided by 10 to match train_dqn, so the two numbers compare directly.
         reward = reward_pic50.load(args.regressor)
