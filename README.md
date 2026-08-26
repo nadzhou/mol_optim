@@ -72,6 +72,17 @@ into its five steps with timings, and explains the flags worth changing.
 - [docs/running.md](docs/running.md) — every command, with timings
 - [results/](results/README.md) — the figures and the numbers
 
+## Working on this repo with Claude Code
+
+**Claude does not write to git. The maintainer makes every commit.**
+
+No `git commit`, no `git merge`, no `git rebase`, no rewriting history, no `git push`, no
+branches or tags, no pull requests. Claude edits files in the working tree and stops
+there — `git add` and everything after it is done by hand.
+
+This includes merge commits and the co-author trailer that comes with them: nothing
+Claude does should put a second name on a commit or in the repo's contributor list.
+
 ## License
 
 [GPL-3.0-or-later](LICENSE).
