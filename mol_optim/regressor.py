@@ -1,6 +1,6 @@
 """The pIC50 regressor: the shared encoder plus a head, and an ensemble of them.
 
-plan.md Step 4, and the reward from Step 5 on. Two deliberate choices. The head sees the
+This is what the RL reward reads. Two deliberate choices. The head sees the
 pooled embedding only — unlike the DQN's, it never reads size, or the agent would be
 handed "add atoms, collect reward" as a direction. And the prediction is an ensemble
 mean carrying its spread, which is largest where the data is thinnest.

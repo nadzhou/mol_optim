@@ -1,4 +1,4 @@
-"""Hyperparameters, passed explicitly. See CLAUDE.md rule 1 — no global config bag."""
+"""Hyperparameters as frozen dataclasses, passed explicitly — never a global config bag."""
 
 from dataclasses import dataclass
 
@@ -57,7 +57,7 @@ class Config:
 
 @dataclass(frozen=True)
 class PretrainConfig:
-    """Every knob for the ZINC AttrMask pretraining, plan.md Step 3b.
+    """Every knob for the ZINC AttrMask pretraining.
 
     Separate from Config, and passed alongside it: the encoder's shape stays in Config
     so the pretrained encoder and the RL encoder are built from one set of numbers.
@@ -81,7 +81,7 @@ class PretrainConfig:
 
 @dataclass(frozen=True)
 class RegressorConfig:
-    """Every knob for the BindingDB pIC50 regressor, plan.md Step 4.
+    """Every knob for the BindingDB pIC50 regressor.
 
     Passed alongside Config for the same reason PretrainConfig is: the encoder's shape
     lives in one place, so the ZINC checkpoint, the RL encoder and this regressor are

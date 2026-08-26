@@ -1,4 +1,4 @@
-"""The molecules the RL run starts from. plan.md, "Target selection".
+"""The molecules the RL run starts from.
 
 Distinct chemotypes rather than the top-k most potent, because the top-k of an EGFR set
 are forty analogs of one quinazoline. Largest active scaffold clusters first: a series

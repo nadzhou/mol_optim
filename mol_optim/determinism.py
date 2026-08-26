@@ -1,4 +1,4 @@
-"""Seeding. Step 0 of plan.md — nothing below it is trustworthy without this."""
+"""Seeding. Nothing measured downstream is trustworthy without this."""
 
 import os
 import random

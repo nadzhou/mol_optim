@@ -34,5 +34,5 @@ def test_dqn_holds_its_qed_level(dqn_run):
     # Golden regression. Measured 0.895 at seed 0 against a random floor of 0.145; the
     # threshold sits below that to survive refactors, not to leave room for a
     # regression. MolDQN publishes ~0.94, which uses double Q with 12 bootstrapped
-    # heads (plan.md tier 1); this is the single-head, single-estimator version.
+    # heads; this is the single-head, single-estimator version.
     assert dqn_run.final_mean_reward > 0.85

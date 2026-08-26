@@ -1,14 +1,16 @@
 # Module map
 
 Start with `environment.py` and `train_dqn.py` — between them they hold the whole loop.
-Everything is plain functions over `Chem.Mol` and tensors; see [CLAUDE.md](../CLAUDE.md)
-for why there are no wrapper classes, no config globals, and no training framework.
+Everything is plain functions over `Chem.Mol` and tensors. There are no wrapper classes,
+no config globals, and no training framework: hyperparameters travel as frozen
+dataclasses passed explicitly, and the reward arrives as a function, so reading a call
+site tells you what runs.
 
 ## The loop
 
 | File | What it is |
 |---|---|
-| `determinism.py` | Step 0: seeds every source of randomness the loop touches |
+| `determinism.py` | seeds every source of randomness the loop touches |
 | `config.py` | every hyperparameter, one frozen dataclass, passed explicitly |
 | `environment.py` | the MDP: candidate enumeration by RWMol edits, `step` |
 | `graph_key.py` | the state key: a canonical name taken off the graph, no SMILES |
@@ -24,8 +26,8 @@ for why there are no wrapper classes, no config globals, and no training framewo
 
 | File | What it is |
 |---|---|
-| `rewards.py` | QED, the Step 1 and Step 2 target |
-| `reward_pic50.py` | the Step 5 reward: the regressor, behind three guardrails |
+| `rewards.py` | QED: RDKit's drug-likeness score, kept as the control |
+| `reward_pic50.py` | the real reward: the pIC50 regressor, behind three guardrails |
 
 ## Data and the pIC50 model
 
@@ -38,7 +40,7 @@ for why there are no wrapper classes, no config globals, and no training framewo
 | `regressor.py` | the pIC50 network and the ensemble that predicts with a spread |
 | `train_regressor.py` | the regressor training loop, ensemble, and test report |
 | `pretrain.py` | masked-atom pretraining on ZINC; writes the shared encoder |
-| `finetune_zinc.py` | the Step 3b question: is that checkpoint a better place to start? |
+| `finetune_zinc.py` | is the pretrained checkpoint a better place to start? |
 
 ## Run once, then forget
 

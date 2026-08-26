@@ -1,5 +1,4 @@
-"""The fragment vocabulary. plan.md "Action space — fragment edits over a precedented
-vocabulary".
+"""The fragment vocabulary: the action space, cut from the target's own actives.
 
 The vocabulary is the action space, so a bug here is not a worse reward — it is a
 different project. These check the two things the rest of the loop assumes: a fragment

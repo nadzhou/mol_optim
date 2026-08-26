@@ -214,9 +214,9 @@ def test_the_logp_probe_reads_logp_out_of_a_random_encoder():
     # contributions, and pooled random features carry composition — so this number is
     # the null that pretraining has to beat, and it is the number that says the probe
     # machinery works at all. The pretrained encoder is not asserted to beat it, and
-    # measured over a full ZINC run it mostly does not — see plan.md Step 3b, where the
-    # frozen probe loses on six of seven properties while fine-tuning from the same
-    # checkpoint wins every comparison. The probe is a sanity check, not the evidence.
+    # measured over a full ZINC run it mostly does not: the frozen probe loses on six of
+    # seven properties while fine-tuning from the same checkpoint wins every comparison.
+    # The probe is a sanity check, not the evidence.
     torch.manual_seed(1)
     untrained = pretrain.MaskedAtomPredictor(CFG)
     probe_molecules = MOLECULES[-600:]

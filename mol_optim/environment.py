@@ -5,9 +5,9 @@ writes or parses a molecule as text — candidates are built by editing an RWMol
 identity comes from graph_key.canonical_hash, taken off the graph itself. Molecules
 become text only at the boundary, in report.py, where a person looks at them.
 
-Restyled per CLAUDE.md: the reward arrives as a function rather than a subclass override
-(rule 4), and the three single-call action generators are inlined into valid_actions
-(rule 2).
+Restyled from the reference implementation: the reward arrives as a function rather
+than a subclass override, and the three single-call action generators are inlined into
+valid_actions.
 """
 
 import itertools

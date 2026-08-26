@@ -1,4 +1,4 @@
-"""Splitting the EGFR dataset by scaffold. plan.md Step 4.
+"""Splitting the EGFR dataset by scaffold.
 
 BindingDB is full of series — one paper, forty analogs of one frame — so a random split
 asks "have I seen this molecule's cousin" and answers beautifully. Whole scaffolds fall

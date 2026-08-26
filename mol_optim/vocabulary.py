@@ -1,8 +1,8 @@
 """The fragment vocabulary: precedented decorations, cut from the target's own actives.
 
-plan.md, "Action space — fragment edits over a precedented vocabulary". This is the
-constraint the reward terms could not supply. Step 5 measured the agent putting an N–N
-bond in 100% of its episodes against a reward that had no term for it; a structural
+This is the constraint the reward terms could not supply. The pIC50 run measured the
+agent putting an N–N bond in 100% of its episodes against a reward that had no term for
+it; a structural
 alert is a term the agent trades against predicted pIC50, and a vocabulary has no
 exchange rate. Every fragment here was cut out of a measured EGFR inhibitor, so the
 question "could the agent build a pentazane" is answered by the vocabulary not

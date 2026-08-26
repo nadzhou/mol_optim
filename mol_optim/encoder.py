@@ -1,8 +1,8 @@
 """The GNN encoder: a batch of molecular graphs to one vector each.
 
 Its own module because three things share it — the Q network here, the ZINC masked-atom
-pretraining at plan.md Step 3b, and the pIC50 regressor at Step 4. One checkpoint
-initializes all three, and that sharing is the point.
+pretraining, and the pIC50 regressor. One checkpoint initializes all three, and that
+sharing is the point.
 
 Message passing is written out rather than taken from torch_geometric: the aggregation
 is one `index_add_`, the pooling is another, and both are deterministic on CPU —
@@ -35,7 +35,7 @@ class GraphEncoder(nn.Module):
     def node_embeddings(self, batch: featurize.Batch) -> torch.Tensor:
         """One vector per atom, before pooling — [total_atoms, hidden].
 
-        Split out of `forward` for the AttrMask pretraining at plan.md Step 3b, which
+        Split out of `forward` for the AttrMask pretraining, which
         predicts a masked atom from its own embedding and never pools.
         """
         h = self.activation(self.atom_embedding(batch.atom_features))  # [total_atoms, hidden]

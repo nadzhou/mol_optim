@@ -1,4 +1,4 @@
-"""The molecules the RL run starts from. plan.md, "Target selection"."""
+"""The molecules the RL run starts from."""
 
 from rdkit import DataStructs
 

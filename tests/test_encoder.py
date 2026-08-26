@@ -2,7 +2,7 @@
 
 Three of these catch bugs that train perfectly well and give the wrong answer:
 permutation invariance, batch-vs-single agreement, and steps remaining reaching the
-head. plan.md Step 2.
+head.
 """
 
 import time

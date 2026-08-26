@@ -1,27 +1,30 @@
 # Running things
 
-All commands assume the virtual environment is active (`source .venv/bin/activate`).
+One path through the pipeline, in the order you would actually run it. All commands
+assume the virtual environment is active (`source .venv/bin/activate`).
+
+`./run_all.sh` runs every step below in sequence. This file exists for when you want to
+run one of them on its own, or change a flag.
+
 Runs write into `runs/`, which is not tracked; the plots worth keeping are copied into
 [`results/`](../results/README.md).
 
-## Train the agent
+## 1. Fetch the data
 
 ```bash
-python -m mol_optim.train_dqn --episodes 5000 --reward qed \
-  --log runs/dqn.csv --checkpoint runs/dqn.pt --top-k runs/dqn_top
+python -m mol_optim.zinc             # 12 MB  → data/zinc.tab
+python -m mol_optim.fetch_bindingdb  # 593 MB → data/egfr_ic50.sdf
 ```
 
-`--reward qed` scores drug-likeness; `--reward pic50` scores with the fitted EGFR
-regressor. `baseline_random.py` takes the same flag and gives you the number to beat.
-`--top-k` writes the best distinct molecules as a drawing and an SDF.
-`--pretrained-encoder models/zinc_encoder.pt` starts from the pretrained encoder rather
-than a random one.
+Each downloads once and is pinned by checksum, so a silently changed upstream file fails
+loudly instead of quietly moving your numbers. BindingDB arrives as a 9 GB table and is
+filtered down to one target's compounds.
 
-5000 episodes took 93 minutes with the fingerprint encoder on QED and 147 with the GNN
-on QED. Throughput falls over a run — about 70 steps/s down to 23 — because the agent
-builds larger molecules and the candidate sets grow with them.
+The fragment vocabulary is committed as `data/egfr_fragments.sdf`, because a run is not
+reproducible without the action space it was measured on. Rebuild it with
+`python -m mol_optim.vocabulary` if you change the dataset.
 
-## Pretrain the encoder
+## 2. Pretrain the encoder on ZINC
 
 ```bash
 python -m mol_optim.pretrain --epochs 10 \
@@ -33,7 +36,7 @@ whole run. The checkpoint carries a hash of the featurization and refuses to loa
 does not match — which is what stops a silently changed feature table from being loaded
 into a network trained against the old one.
 
-## Train the pIC50 regressor
+## 3. Train the pIC50 regressor
 
 ```bash
 python -m mol_optim.train_regressor \
@@ -42,12 +45,50 @@ python -m mol_optim.train_regressor \
 
 Five networks on the EGFR scaffold split, about 11 minutes, reporting test MAE, RMSE and
 Spearman against the null of predicting the training mean. Drop `--pretrained-encoder`
-for the from-scratch comparison.
+for the from-scratch comparison — that is the ablation, and it is worth about 0.06 MAE.
 
-## Draw any of it
+## 4. Train the agent
 
 ```bash
-python -m mol_optim.plot_run runs/dqn.csv --out runs/curve.png --random-baseline 0.146
+python -m mol_optim.train_dqn --episodes 1000 --reward pic50 \
+  --seed-molecule 0 --max-steps 6 \
+  --pretrained-encoder models/zinc_encoder.pt \
+  --regressor models/egfr_regressor.pt \
+  --log runs/pilot.csv --checkpoint runs/pilot.pt --top-k runs/pilot_top
+```
+
+About 5 minutes. `--seed-molecule` indexes the five seed scaffolds the run can start
+from, and each is evaluated against its own measured pIC50. `--max-steps 6` is
+deliberate: at 40 edits the agent leaves the regressor's applicability domain and the
+prediction stops meaning anything.
+
+`baseline_random.py` takes the same flags and gives you the number to beat:
+
+```bash
+python -m mol_optim.baseline_random --episodes 1000 --reward pic50 \
+  --seed-molecule 0 --max-steps 6 --regressor models/egfr_regressor.pt
+```
+
+`--reward qed` swaps in RDKit's drug-likeness score. That is the control, not the target:
+it needs no regressor and no seed molecule, and what it shows is an agent building
+molecules that score 0.93 and cannot exist.
+
+## 5. Look at what it built
+
+A climbing reward curve is not the result. These are:
+
+```bash
+python -m mol_optim.audit runs/pilot_top.sdf --seed-molecule 0
+python -m mol_optim.plot_run runs/pilot.csv --out runs/pilot.png --random-baseline 0.331
+```
+
+`audit` counts the substructures past runs have gone wrong in and checks the seed's
+scaffold survived. `--top-k` above already wrote the best distinct molecules as a drawing
+and an SDF.
+
+The other two plotting scripts read the checkpoints from steps 2 and 3:
+
+```bash
 python -m mol_optim.plot_pretrain runs/pretrain_zinc.csv --out runs/pretrain_curve.png
 python -m mol_optim.plot_regressor models/egfr_regressor.pt --out runs/regressor.png
 ```

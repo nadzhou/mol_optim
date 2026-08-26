@@ -1,6 +1,6 @@
 """The EGFR dataset: unit conversion, aggregation, and what came out of the ingest.
 
-plan.md Step 4. The conversion tests are hand-computed on purpose — nM against uM
+The conversion tests are hand-computed on purpose — nM against uM
 against M is endemic in binding data, and getting it wrong shifts every label by a
 constant, which is invisible in a test-set MAE and wrong in every comparison against a
 real number.

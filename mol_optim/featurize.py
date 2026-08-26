@@ -10,9 +10,9 @@ Every categorical ends in an "other" bucket, so an atom or bond the tables do no
 lands in a real column instead of an all-zero row or an exception in the middle of a
 run.
 
-Step 2 of plan.md replaced the Morgan fingerprint that used to live here. The
-fingerprint path is deleted rather than kept behind a flag (CLAUDE.md: no branch
-matrix); it stays reproducible from git history.
+The GNN encoder replaced the Morgan fingerprint that used to live here. The
+fingerprint path is deleted rather than kept behind a flag, so no reader has to trace a
+branch matrix; it stays reproducible from git history.
 """
 
 import hashlib
@@ -88,7 +88,7 @@ def signature() -> str:
 
     An encoder pretrained on one featurization and then loaded against another reads
     every input column as something it was not — a silent, total waste of the
-    pretraining (plan.md Step 3b). Widths alone do not catch it: reordering ATOM_TYPES
+    pretraining. Widths alone do not catch it: reordering ATOM_TYPES
     changes what every element column means and changes no dimension. So this hashes
     the tables themselves, and pretrain.load_encoder refuses a checkpoint whose hash
     is not this one.

@@ -1,4 +1,4 @@
-"""BindingDB IC50 values as pIC50 on graphs. plan.md Step 4.
+"""BindingDB IC50 values as pIC50 on graphs.
 
 `fetch_bindingdb.py` writes the dataset this reads. The unit conversion lives here
 rather than inline because nM against uM shifts every label by a constant, and that

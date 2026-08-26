@@ -1,4 +1,4 @@
-"""The scaffold split and the leakage it exists to prevent. plan.md Step 4.
+"""The scaffold split and the leakage it exists to prevent.
 
 BindingDB duplicates compounds across assays and fills up with series of close analogs
 around one frame. Both leak through a random split, and both produce a test score that

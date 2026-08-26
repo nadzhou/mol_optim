@@ -65,7 +65,7 @@ def train(
         # Only the encoder. The Q head scores a reward that did not exist during
         # pretraining, so it starts from its own initialization. load_encoder refuses a
         # checkpoint built on another featurization or another encoder shape — the
-        # silent no-op this whole step is designed around (plan.md Step 3b).
+        # silent no-op that would otherwise leave the encoder randomly initialized.
         online_dqn.encoder.load_state_dict(pretrain.load_encoder(pretrained_encoder, cfg))
     target_dqn = dqn.MolDQN(cfg).to(device)
     target_dqn.load_state_dict(online_dqn.state_dict())

@@ -1,6 +1,6 @@
 """AttrMask pretraining on ZINC: mask atoms, name them from the graph around them.
 
-plan.md Step 3b. One checkpoint initializes both the RL encoder and the pIC50 regressor.
+One checkpoint initializes both the RL encoder and the pIC50 regressor.
 
 The mask is an all-zero atom feature row, and that is the design. It carries nothing —
 the AttrMask bug is a mask the head can see through, which looks like a beautiful loss

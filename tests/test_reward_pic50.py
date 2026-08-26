@@ -1,4 +1,4 @@
-"""The reward's guardrails. plan.md Step 5."""
+"""The reward's guardrails."""
 
 from pathlib import Path
 

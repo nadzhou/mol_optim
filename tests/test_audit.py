@@ -1,4 +1,4 @@
-"""Substructure auditing of a run's molecules. plan.md Steps 3 and 5.
+"""Substructure auditing of a run's molecules.
 
 `tests/fixtures/audit_motifs.sdf` was generated once, the same way molecules.sdf was,
 from: hydrazine NN, phenylhydrazine NNc1ccccc1, tetrazane_chain NNNNc1ccccc1,

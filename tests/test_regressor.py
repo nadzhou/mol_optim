@@ -1,4 +1,4 @@
-"""The pIC50 regressor. plan.md Step 4.
+"""The pIC50 regressor.
 
 The overfit test is the one to keep: it takes seconds and it fails loudly for every
 broken forward pass, dead gradient and mis-shaped label there is. The random-label

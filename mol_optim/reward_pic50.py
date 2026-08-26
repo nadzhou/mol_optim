@@ -1,4 +1,4 @@
-"""The pIC50 regressor as the RL reward, with guardrails. plan.md Step 5.
+"""The pIC50 regressor as the RL reward, with guardrails.
 
 An agent optimizing a surrogate finds its mistakes — Step 3 built hemiaminals against a
 published model. Three guardrails fire in order: zero the reward below `domain_floor`
