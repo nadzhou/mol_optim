@@ -1,12 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# Without this, setuptools tries to auto-discover packages and trips over the sibling
+# data/, models/, runs/ and results/ directories.
+[tool.setuptools]
+packages = ["mol_optim"]
+
 [project]
 name = "mol-optim"
 version = "0.1.0"
 requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 dependencies = ["rdkit", "torch", "numpy", "matplotlib"]
 
-# Docking only. Kept optional because it is an evaluation tool that never runs in the
-# training loop, and because vina has no wheel for Apple Silicon — see README.
 [project.optional-dependencies]
+dev = ["pytest", "hypothesis"]
+# Docking only. Kept optional because it is an evaluation tool that never runs in the
+# training loop, and because vina has no wheel everywhere — see docs/docking.md.
 docking = ["vina", "meeko", "scipy", "gemmi"]
 
 [tool.pytest.ini_options]

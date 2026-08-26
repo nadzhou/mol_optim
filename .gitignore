@@ -17,3 +17,6 @@ data/structures/*
 !data/structures/1M17_ligand.sdf
 models/*.pkl
 .DS_Store
+*.egg-info/
+build/
+dist/
