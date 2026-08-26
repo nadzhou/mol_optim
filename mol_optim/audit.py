@@ -1,0 +1,119 @@
+"""What did the agent actually build? Substructure counts over a run's molecules.
+
+plan.md Steps 3 and 5 both ended the same way: a reward curve that climbs, and a top-k
+of molecules no chemist would order. Step 3 found hemiaminals, Step 5 found chains of
+catenated nitrogen, and the Step 5 motifs were found by looking at a drawing after the
+Step 3 motif list came back empty. So the list is a record of what has been found, not a
+guarantee of what is there — when a new run scores well, look at the picture too.
+
+Pure: a molecule in, counts out. Nothing here reads a file or holds state.
+"""
+
+from dataclasses import dataclass
+
+from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
+
+# Each entry is a structure that has actually turned up in a run of this project, with
+# the step that produced it. Aromatic rings are excluded where the aromatic form is
+# ordinary chemistry — a pyrazole is not a hydrazine.
+MOTIFS: dict[str, Chem.Mol] = {
+    # Step 3, the GSK3B oracle run: falls apart in water.
+    "hemiaminal": Chem.MolFromSmarts("[#7][#6X4][OX2H1]"),
+    "aminal": Chem.MolFromSmarts("[#7][#6X4][#7]"),
+    "gem-diol": Chem.MolFromSmarts("[OX2H1][#6X4][OX2H1]"),
+    "N-hydroxyl": Chem.MolFromSmarts("[#7][OX2H1]"),
+    # Step 5, the pIC50 regressor run: hydrazines and longer polyazanes.
+    "N-N": Chem.MolFromSmarts("[#7;!a]-[#7;!a]"),
+    "N-N-N": Chem.MolFromSmarts("[#7;!a]-[#7;!a]-[#7;!a]"),
+}
+
+
+@dataclass(frozen=True)
+class Audit:
+    """One molecule, read for the things past runs have gone wrong in."""
+
+    motif_counts: dict[str, int]  # matches per motif, zeros included
+    num_heavy_atoms: int
+    num_nitrogens: int
+    # Nitrogen bonded to nitrogen, aromatic or not. Counted separately from the N-N
+    # motif because a fused triazine's contiguous NH read as aromatic and the SMARTS
+    # misses them, which is how the Step 5 audit came back clean the first time.
+    num_nitrogen_nitrogen_bonds: int
+    scaffold_intact: bool | None  # None when no scaffold was given to check against
+
+
+def audit(mol: Chem.Mol, scaffold: Chem.Mol | None = None) -> Audit:
+    """Every count for one molecule."""
+    return Audit(
+        motif_counts={
+            name: len(mol.GetSubstructMatches(pattern))
+            for name, pattern in MOTIFS.items()
+        },
+        num_heavy_atoms=mol.GetNumHeavyAtoms(),
+        num_nitrogens=sum(
+            1 for atom in mol.GetAtoms() if atom.GetAtomicNum() == 7
+        ),
+        num_nitrogen_nitrogen_bonds=sum(
+            1
+            for bond in mol.GetBonds()
+            if bond.GetBeginAtom().GetAtomicNum() == 7
+            and bond.GetEndAtom().GetAtomicNum() == 7
+        ),
+        scaffold_intact=(
+            None if scaffold is None else mol.HasSubstructMatch(scaffold)
+        ),
+    )
+
+
+def scaffold_of(mol: Chem.Mol) -> Chem.Mol:
+    """The Bemis-Murcko frame, which is what "the scaffold survived" is checked against."""
+    return MurckoScaffold.GetScaffoldForMol(mol)
+
+
+if __name__ == "__main__":
+    import argparse
+    from pathlib import Path
+
+    from mol_optim import bindingdb, molio, seeds
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("sdf", type=Path, help="molecules to audit, e.g. a top-k SDF")
+    parser.add_argument(
+        "--seed-molecule",
+        type=int,
+        default=None,
+        help="index into seeds.choose(); checks its scaffold survived",
+    )
+    args = parser.parse_args()
+
+    molecules = molio.read(args.sdf)
+    scaffold = None
+    if args.seed_molecule is not None:
+        seed = seeds.choose(bindingdb.load())[args.seed_molecule]
+        scaffold = scaffold_of(seed.mol)
+        print(f"seed {args.seed_molecule}: {Chem.MolToSmiles(scaffold)}")
+        print(f"  {audit(seed.mol, scaffold)}\n")
+
+    audits = [audit(mol, scaffold) for mol in molecules]
+    print(f"{'#':>3} {'atoms':>6} {'N':>3} {'N-N':>4} {'scaffold':>9}  motifs")
+    for index, row in enumerate(audits):
+        hits = ", ".join(
+            f"{name} x{count}" for name, count in row.motif_counts.items() if count
+        )
+        print(
+            f"{index:>3} {row.num_heavy_atoms:>6} {row.num_nitrogens:>3} "
+            f"{row.num_nitrogen_nitrogen_bonds:>4} "
+            f"{'-' if row.scaffold_intact is None else ('yes' if row.scaffold_intact else 'NO'):>9}"
+            f"  {hits or '-'}"
+        )
+
+    print(f"\nover {len(audits)} molecules:")
+    for name in MOTIFS:
+        carrying = sum(1 for row in audits if row.motif_counts[name])
+        print(f"  {name:>12}: {carrying}/{len(audits)}")
+    carrying = sum(1 for row in audits if row.num_nitrogen_nitrogen_bonds)
+    print(f"  {'any N-N bond':>12}: {carrying}/{len(audits)}")
+    if scaffold is not None:
+        intact = sum(1 for row in audits if row.scaffold_intact)
+        print(f"  {'scaffold':>12}: {intact}/{len(audits)} intact")
