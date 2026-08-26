@@ -248,6 +248,12 @@ if __name__ == "__main__":
         help="index into seeds.choose(); the molecule episodes start from",
     )
     parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=config.Config.max_steps_per_episode,
+        help="edits per episode; 6 for pic50, where 40 leaves the applicability domain",
+    )
+    parser.add_argument(
         "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
     )
     parser.add_argument(
@@ -281,7 +287,12 @@ if __name__ == "__main__":
             )
 
     run = train(
-        config.Config(episodes=args.episodes, seed=args.seed, init_mol=init_mol),
+        config.Config(
+            episodes=args.episodes,
+            seed=args.seed,
+            init_mol=init_mol,
+            max_steps_per_episode=args.max_steps,
+        ),
         reward_fn,
         log_path=args.log,
         checkpoint_path=args.checkpoint,

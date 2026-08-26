@@ -82,6 +82,35 @@ for the from-scratch null.
 .venv/bin/python -m mol_optim.plot_regressor models/egfr_regressor.pt --out runs/regressor.png
 ```
 
+## Docking (optional)
+
+`docking.py` and `fetch_structure.py` need extras the training loop does not:
+
+```bash
+brew install boost swig open-babel
+```
+
+AutoDock Vina publishes no wheel for Apple Silicon and its `setup.py` looks for Boost
+only in a conda prefix or `/usr/local`, then compiles with `-std=c++11`, which Boost 1.92
+headers no longer support. Point it at Homebrew and raise the standard:
+
+```bash
+pip download vina --no-deps --no-binary :all: -d /tmp/vina && tar xzf /tmp/vina/vina-*.tar.gz -C /tmp/vina && sed -i '' 's/-std=c++11/-std=c++17/' /tmp/vina/vina-*/setup.py && CONDA_DEFAULT_ENV=brew CONDA_PREFIX=$(brew --prefix) pip install meeko scipy gemmi /tmp/vina/vina-*/
+```
+
+Then build the receptor once:
+
+```bash
+.venv/bin/python -m mol_optim.fetch_structure
+```
+
+Open Babel types the receptor rather than Meeko, whose polymer path fails on this
+entry's terminal residues. The gating test is the redock:
+
+```bash
+.venv/bin/pytest tests/test_docking.py
+```
+
 ## Layout
 
 | File | What it is |
@@ -94,6 +123,7 @@ for the from-scratch null.
 | `rewards.py` | QED, the Step 1 and Step 2 target |
 | `bindingdb.py` | the EGFR dataset: pIC50 units, aggregation, loading |
 | `fetch_bindingdb.py` | run once: BindingDB's 9 GB table in, one target's compounds out |
+| `vocabulary.py` | the fragment vocabulary: precedented decorations cut from the actives |
 | `splits.py` | scaffold split, and holding the seed scaffolds out of training |
 | `regressor.py` | the pIC50 network and the ensemble that predicts with a spread |
 | `train_regressor.py` | the regressor training loop, ensemble, and test report |
@@ -108,6 +138,9 @@ for the from-scratch null.
 | `baseline_random.py` | tier 0 of the ladder — the number DQN has to beat |
 | `molio.py` | SDF in and out; the only place a graph becomes bytes |
 | `report.py` | top-k molecules as a drawing and an SDF |
+| `audit.py` | what the agent built: motif counts and whether the scaffold survived |
+| `docking.py` | AutoDock Vina against a prepared receptor — measured not to rank here |
+| `fetch_structure.py` | run once: a PDB entry in, a Vina-ready receptor out |
 | `plot_run.py` | reward and loss curves from a run log |
 | `plot_pretrain.py` | loss and accuracy curves from a pretraining log |
 | `plot_regressor.py` | predicted against measured, and whether disagreement predicts error |

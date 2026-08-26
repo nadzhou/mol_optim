@@ -2,7 +2,12 @@
 name = "mol-optim"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["rdkit", "torch", "numpy"]
+dependencies = ["rdkit", "torch", "numpy", "matplotlib"]
+
+# Docking only. Kept optional because it is an evaluation tool that never runs in the
+# training loop, and because vina has no wheel for Apple Silicon — see README.
+[project.optional-dependencies]
+docking = ["vina", "meeko", "scipy", "gemmi"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -38,6 +38,12 @@ if __name__ == "__main__":
         default=None,
         help="final mean reward of the random rollout, drawn as a floor",
     )
+    parser.add_argument(
+        "--seed-reward",
+        type=float,
+        default=None,
+        help="the starting molecule's own reward, drawn as the do-nothing line",
+    )
     args = parser.parse_args()
 
     figure, (reward_axes, loss_axes) = plt.subplots(
@@ -66,6 +72,15 @@ if __name__ == "__main__":
             color="0.35",
             ls="--",
             label=f"random baseline ({args.random_baseline:.3f})",
+        )
+    # What the agent gets for taking the no-op every step. Anything below this line is
+    # an agent that has damaged its own starting molecule.
+    if args.seed_reward is not None:
+        reward_axes.axhline(
+            args.seed_reward,
+            color="firebrick",
+            ls=":",
+            label=f"seed molecule, unedited ({args.seed_reward:.3f})",
         )
 
     reward_axes.set_ylabel(args.ylabel)

@@ -4,5 +4,15 @@ __pycache__/
 .pytest_cache/
 .hypothesis/
 runs/
-data/
+# data/* rather than data/, or git never descends far enough for the negations below
+# to be reachable — an excluded directory cannot have a file re-included out of it.
+data/*
+# The vocabulary is the action space: a run is not reproducible without it.
+!data/egfr_fragments.sdf
+# The receptor and the ligand the docking box is centred on: what a run docked
+# against has to stay inspectable, the way models/gsk3b_forest.npz does.
+!data/structures/
+data/structures/*
+!data/structures/1M17_receptor.pdbqt
+!data/structures/1M17_ligand.sdf
 models/*.pkl

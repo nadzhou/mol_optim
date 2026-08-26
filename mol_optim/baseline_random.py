@@ -5,19 +5,23 @@ ties this is a broken agent, and nothing else in the test suite catches that.
 """
 
 import time
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
 from rdkit import Chem
 
 from mol_optim import (
+    bindingdb,
     config,
     determinism,
     environment,
     graph_key,
     oracle_gsk3b,
     results,
+    reward_pic50,
     rewards,
+    seeds,
 )
 
 
@@ -54,19 +58,49 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--reward",
-        choices=("qed", "gsk3b"),
+        choices=("qed", "gsk3b", "pic50"),
         default="qed",
-        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3",
+        help="qed is Step 1-2; gsk3b is the TDC oracle, Step 3; pic50 is Step 5",
+    )
+    parser.add_argument(
+        "--seed-molecule",
+        type=int,
+        default=None,
+        help="index into seeds.choose(); the molecule episodes start from",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=config.Config.max_steps_per_episode,
+        help="edits per episode; 6 for pic50, where 40 leaves the applicability domain",
+    )
+    parser.add_argument(
+        "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
     )
     args = parser.parse_args()
 
+    init_mol = None
     if args.reward == "qed":
         reward_fn = rewards.qed
-    else:
+    elif args.reward == "gsk3b":
         forest = oracle_gsk3b.load()
         reward_fn = lambda mol: oracle_gsk3b.score(forest, mol)  # noqa: E731
+    else:
+        # Divided by 10 to match train_dqn, so the two numbers compare directly.
+        reward = reward_pic50.load(args.regressor)
+        reward_fn = lambda mol: reward_pic50.score(reward, mol) / 10.0  # noqa: E731
+    if args.seed_molecule is not None:
+        init_mol = seeds.choose(bindingdb.load())[args.seed_molecule].mol
 
-    run = rollout(config.Config(episodes=args.episodes, seed=args.seed), reward_fn)
+    run = rollout(
+        config.Config(
+            episodes=args.episodes,
+            seed=args.seed,
+            init_mol=init_mol,
+            max_steps_per_episode=args.max_steps,
+        ),
+        reward_fn,
+    )
     best_molecule, best_reward = run.best
     print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
     print(

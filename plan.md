@@ -134,6 +134,52 @@ Levers, in the order to reach for them:
 4. Only if still too slow: sample a fixed-size candidate subset per step — but this
    changes the MDP and gives up the argmax guarantee, so it is a last resort
 
+### Measured, before anything was built on it
+
+**The vocabulary.** BRICS over the 5,392 EGFR compounds at pIC50 ≥ 7.0 gives 13,496
+usable fragment occurrences across 879 distinct fragments, once two kinds of piece are
+set aside: 21,753 occurrences with zero or two-plus open ends, which are linkers and
+cores rather than decorations, and 379 single-attachment pieces larger than 12 heavy
+atoms — the largest is 33, which is not a substituent, it is another molecule. **The top
+50 cover 78%** of what is left, so the plan's "start near 50" is the right size; the top
+25 cover 67% and the top 100 only reach 86%.
+
+`data/egfr_fragments.sdf` is that vocabulary, under version control because it *is* the
+action space and a run is not reproducible without it. It reads like a substituent list
+a chemist would write: methoxy, acrylamide, phenyl, dimethylamino, chlorofluorophenyl,
+tert-butyl, N-methylpiperazine, trifluoromethyl, morpholine, cyclopropyl, methylsulfonyl.
+Fragments are hashed with the BRICS dummy still attached, so ortho- and para-fluorophenyl
+are two entries rather than one — collapsing them would delete the regiochemistry the
+vocabulary exists to carry.
+
+**None of the 50 contains a non-aromatic N–N bond.** That is the Step 5 finding closed by
+construction rather than by a penalty, and it is asserted in the test suite rather than
+noted here.
+
+**The cost, and lever 2.** Every free valence against 50 fragments:
+
+| | seed 0 | seed 1 | seed 2 | seed 3 | seed 4 |
+|---|---|---|---|---|---|
+| heavy atoms | 19 | 44 | 27 | 21 | 35 |
+| candidates, every free valence | 500 | 750 | 650 | 450 | 700 |
+| per step: enumerate + dedup + score | 212 ms | 558 ms | 351 ms | 194 ms | 430 ms |
+| candidates, aromatic C–H only | 400 | 250 | 450 | 350 | 300 |
+| per step | 164 ms | 175 ms | 248 ms | 138 ms | 172 ms |
+
+The unrestricted version **misses the 0.5 s budget** on the largest seed, before removal
+actions exist and before the molecule grows over an episode. So lever 2 is taken:
+attachment is restricted to aromatic C–H, one site per symmetry class of the state's
+canonical ranking. That is the dominant real derivatization move, it holds every seed
+under 250 ms, and it gives up decoration at aliphatic positions and at exocyclic N–H —
+N-alkylating a piperazine is real chemistry this action space cannot do. Revisit if the
+agent looks starved for moves.
+
+One surprise worth recording: **deduplication costs more than scoring.** 68 to 124 ms
+against 58 to 94 ms, because `graph_key.normalize` kekulizes and re-sanitizes every
+candidate, and that runs 250 to 550 times a step. It buys little here — the raw and
+deduplicated counts differ by 0 to 18% — but it is a correctness requirement, not an
+optimization, so it stays until something cheaper is proven equivalent.
+
 Episodes get shorter too. Atom-level needs ~40 steps to grow a substituent that
 fragment-level attaches in one, so `max_steps` starts around 5–8 — and the
 discount has to be re-tuned to match, or the terminal reward is weighted wrong.
@@ -218,7 +264,51 @@ surrogate, not binding. Mitigations, all cheap, all needed from day one:
 - **Reward clipping** — cap predicted pIC50 near the max observed in training.
   There is no molecule 10 logs better than everything known.
 - **Docking spot-check** — Vina/smina on final top hits. Not in the loop, too
-  slow; an independent check that hits aren't nonsense.
+  slow; an independent check that hits aren't nonsense. **Measured, and it does not
+  work on this target** — see below.
+
+### The docking spot-check was built and does not rank EGFR compounds
+
+Every number in this project traces back to one GNN trained on BindingDB, so an
+orthogonal signal was worth having. AutoDock Vina 1.2.7 against 1M17 — the EGFR kinase
+domain with erlotinib bound — receptor typed by Open Babel, ligands prepared by Meeko
+straight from an RDKit `Mol`, box 22 Å on the co-crystal ligand's centroid.
+
+**The setup is right.** Redocking erlotinib puts the top-scored pose **1.28 Å** from the
+crystal pose, against a conventional 2.0 Å pass, and the correct pose is also the
+best-scored one. 6 s a ligand at exhaustiveness 16.
+
+**The score still carries no usable signal.** From
+`python -m mol_optim.docking runs/pilot_pic50_seed0_top.sdf --controls`:
+
+| | Vina score, kcal/mol | ligand efficiency | heavy atoms |
+|---|---|---|---|
+| Step 5 top 12 | **−8.84** | −0.374 | 23.8 |
+| 15 EGFR compounds, pIC50 ≥ 9 | −7.69 | −0.353 | 22.0 |
+| 15 EGFR compounds, pIC50 ≤ 5.5 | **−7.93** | −0.361 | 22.5 |
+| 15 ZINC molecules | −7.72 | −0.317 | 24.9 |
+
+**The weak binders score better than the potent ones.** Three and a half logs of measured
+difference, and Vina puts the weaker half 0.24 kcal/mol ahead. Across all 30 compounds,
+spanning pIC50 4.0 to 11.2, score against measured pIC50 is Spearman +0.26 — and the sign
+is the wrong way round, because Vina is negative-is-better. Ligand efficiency, the
+standard size correction, does not rescue it. Size explains part of the spread — score
+against heavy-atom count is Spearman −0.41 — but not all. (Vina is stochastic; a separate
+run of the same 30 gave +0.31. The qualitative result is stable, the second decimal is
+not.)
+
+So the check cannot say whether the Step 5 molecules are real — it cannot say that about
+known inhibitors either. Note the Step 5 molecules score *best* of the four groups, which
+would have read as vindication if the controls had been left out. That is what the
+controls are for.
+
+What this does and does not license. It is one rigid receptor, one structure, stock Vina,
+30 compounds, protonation assigned crudely at pH 7.4 — not a claim that docking is
+useless, and not a reason to skip it at Step 8. It is a measurement that the spot-check
+as specified would have returned a confident number meaning nothing. If an orthogonal
+signal is wanted, the next things to try are an ensemble of EGFR structures, a rescoring
+function, or more compounds — each of which has to clear this same ranking test before
+anything is built on it.
 
 ## Target selection
 
@@ -242,17 +332,22 @@ results can be compared against each other; few enough that each gets a real
 compute budget. Cluster the actives by Murcko scaffold and take a representative
 from each of the largest clusters.
 
-## Lipinski — filter vs. penalty
+## Synthetic accessibility — a penalty, never a filter
 
 A hard filter gives zero gradient signal and can starve the agent (every candidate
-rejected → no learning).
+rejected → no learning). This is not hypothetical here: the applicability domain *is*
+a hard filter, and at 40 atom-level edits it zeroed the reward on every rollout from
+every seed. See [Step 5, Measured](#the-episode-budget-is-the-guardrail).
 
-- **Training:** soft penalty, e.g. reward × `exp(-α · num_violations)`.
-- **Evaluation:** hard filter. Report raw and Lipinski-passing hit rates.
+- **Training:** soft penalty on **SA score** (synthetic accessibility), applied to the
+  predicted pIC50 the way the domain penalty is — reward × `exp(-α · max(0, sa - target))`,
+  so a molecule that is already easy to make pays nothing.
+- **Evaluation:** report the SA distribution alongside top-k, not a single number.
 
-Add **SA score** (synthetic accessibility) alongside — Lipinski alone happily
-admits molecules nobody can synthesize, and in practice that's the more common
-failure than Ro5 violation.
+**Lipinski is out of scope.** Ro5 is a filter over four descriptors a chemist reads
+off the final table anyway, and it is not the failure this project produces. Step 3
+produced hemiaminals and N-hydroxylamines — structures that fall apart in water, and
+that pass Ro5 comfortably. SA is aimed at that failure; Ro5 is not.
 
 ## Algorithm ladder (simple → complex)
 
@@ -261,7 +356,7 @@ failure than Ro5 violation.
 | 0 | Random / greedy over candidate set | Baseline. If RL doesn't beat this, something is wrong. |
 | 1 | **DQN** (double DQN + bootstrapped heads) | What MolDQN is. Already works on QED. |
 | 2 | **PPO** — policy = softmax over scored candidates | Same encoder, on-policy, usually better sample efficiency |
-| 3 | Multi-objective: pIC50 + QED + SA + Lipinski | Scalarized, or Pareto |
+| 3 | Multi-objective: pIC50 + QED + SA | Scalarized, or Pareto |
 | 4 | **GFlowNet** | Samples proportional to reward → *diverse batch* |
 
 Tier 4 is arguably the correct endpoint: we want 50 diverse plausible analogs for
@@ -908,15 +1003,173 @@ chemically.
 - Determinism: same molecule twice → identical reward (catches dropout left on at
   eval, or nondeterministic pooling)
 
-## Step 6 — Lipinski / SA soft penalties
+### The episode budget is the guardrail
+
+The applicability domain is a hard filter, and this plan says a hard filter starves the
+agent. At `max_steps_per_episode = 40` it does. Atom-level edits are small, but forty of
+them are not: one random edit takes seed 0 from Tanimoto 0.72 to the training set down
+to 0.59, five reach the 0.3 floor, and forty land at 0.16.
+
+| random edits from seed 0 | 1 | 2 | 4 | 6 | 10 | 20 | 40 |
+|---|---|---|---|---|---|---|---|
+| median Tanimoto to training set | 0.59 | 0.45 | 0.37 | 0.28 | 0.24 | 0.18 | 0.16 |
+| mean reward, pIC50 units | 7.28 | 6.98 | 5.59 | 3.21 | 1.07 | 0.00 | 0.00 |
+
+Over 360 random rollouts at 40 edits — 60 from each of the five seeds and 60 from
+scratch — **not one terminal molecule cleared the floor**. Every reward was exactly 0.0.
+A 5000-episode run at that budget would have trained on a flat line, and the log would
+have looked like a hard research problem rather than a misconfigured one.
+
+So `max_steps_per_episode` is **6** for this reward. That is the number
+[Action space](#the-cost-candidate-set-explosion) predicted the fragment vocabulary
+would need anyway, arriving early and for a different reason: not that fragment edits
+are large, but that the applicability domain is only a few atom-level edits wide.
+
+The discount is unchanged at 0.9, which now weights the first step's reward by 0.9^5 =
+0.59 rather than 0.9^39 = 0.02. Intermediate rewards matter under this budget where
+they were rounding error under the old one.
+
+### The reward means something chemically
+
+`test_ranks_known_inhibitors_above_random_zinc`, the one test here that is about
+chemistry rather than plumbing: 628 held-out actives at pIC50 ≥ 8.0 score a mean reward
+of **7.516** against **1.508** for 500 ZINC molecules — a 6.01 log gap and ROC AUC
+**0.990**, against thresholds of 1.0 and 0.8.
+
+That number conflates two things, so both were measured. The domain filter zeroes 71.6%
+of the ZINC sample and 0.5% of the actives, which is most of the gap. The regressor on
+its own, guardrails off, still separates them: actives 7.650, decoys 5.619, a 2.03 log
+gap at ROC AUC **0.963**. The regressor does the ranking and the domain filter sharpens
+it. Neither is carrying the test alone, which is what had to be established before the
+agent was allowed to optimize against it.
+
+### Measured
+
+A pilot, not the deliverable: one seed, 1000 episodes, 6 edits, 292 s
+(`runs/pilot_pic50_seed0.csv`, drawn in `runs/pilot_pic50_seed0.png`). Seed 0 is a
+4-anilinoquinazoline — the gefitinib chemotype — 19 heavy atoms, measured pIC50 10.00,
+predicted 7.38, Tanimoto 0.72 to the nearest training compound.
+
+Three lines on that plot, and the order matters. Random at the same budget is **0.331**.
+The seed handed back untouched is **0.738**, which is what the agent collects for taking
+the no-op every step. The DQN reaches **0.859** over the last 100 episodes and peaks at
+0.925 near episode 800. It crosses the no-op line around episode 510 and stays above it,
+so it is finding edits the regressor scores above the lead rather than learning to sit
+still. Best single molecule **0.995** — predicted pIC50 9.95 at 24 heavy atoms.
+
+Two things in the curve worth naming. The first 180 episodes run *below* random, down to
+0.15: epsilon is near 1.0 and the agent has not yet learned to stay inside the domain,
+so most episodes end at zero. And the MSE loss climbs from 0.07 to 0.30 across the run
+rather than falling, because the reward the agent reaches keeps growing and the TD
+targets grow with it. It flattens after episode 800; a loss that kept climbing would be
+the thing to chase.
+
+Re-running the same command reproduced the run exactly — same final mean, same best
+molecule, same graph hash — which is Step 0 still doing its job five steps later.
+
+### The agent games the regressor again, and this time the molecule looks plausible
+
+Step 3 found hemiaminals. The audit here started by looking for those, and none of them
+are present: hemiaminal 0/12, N-hydroxylamine 0/12, aminal 0/12, gem-diol 0/12. The
+drawing is the reason not to stop there.
+
+**The scaffold survives.** All 12 of the top molecules still contain the seed's Murcko
+frame, against 66% for 200 random 6-edit rollouts. Part of that is the budget and part is
+the agent, and the two numbers say which is which.
+
+**The nitrogen is the tell.** The seed has 4 nitrogens and no N–N bond. Every one of the
+top 12 has 7 to 10 nitrogens and **3 to 6 N–N bonds** — aryl hydrazines, chains of three
+and four catenated NH, and fused rings carrying three contiguous NH. Random rollouts at
+the same budget put an N–N bond in 40% of molecules, so this is a preference the agent
+learned, not something the action space hands out. Polyazanes of that kind are not
+stable and no chemist would order one.
+
+So the failure mode is the same as Step 3 and the disguise is better. The quinazoline
+core is real medicinal chemistry, the decorations are not, and a drawing that looks like
+an EGFR inhibitor at a glance is harder to throw out than an obvious hemiaminal.
+
+**The guardrails did not fire on any of it**, and the numbers say why:
+
+| guardrail | setting | what the top 12 did |
+|---|---|---|
+| applicability domain | zero below Tanimoto 0.3 | 0.42 to 0.70 — comfortably inside |
+| ensemble pessimism | −0.5 × spread | spread 0.84 to 1.23, so it removed about 0.45 of a 10.4 prediction |
+| reward clipping | 11.10, the best training pIC50 | never engaged |
+
+The domain check works on molecules that are far away, which is what
+[Step 4](#the-guardrails-step-5-assumes-measured-before-step-5-leans-on-them) measured it
+for. It does nothing about a molecule one hydrazine away from a real inhibitor. And note
+where these predictions sit: Step 4 reported that the regressor's test predictions
+compress into 6 to 8.5, and the agent is being paid 9.66 to 10.44. It has found the
+place where the model extrapolates upward, which is the definition of the adversarial
+example [Reward](#the-failure-mode-to-design-around) predicts.
+
+### How much of the gain is the nitrogen?
+
+The top 12 are the 12 best episodes of 1000, so they need not describe the policy. They
+do. Two hundred greedy episodes from the trained checkpoint, epsilon at the 0.01 the run
+ended on:
+
+- **100% carry at least one N–N bond**, mean 3.0 per molecule
+- 198 of 200 carry three or four, and score a mean predicted pIC50 of **8.51**
+- the 2 that carry fewer score **7.72**, against the seed's own 7.38
+
+So the policy has collapsed onto one motif, and the whole distance from the no-op line
+to 8.50 arrives with nitrogen catenation attached. Step 5's headline — 0.859 against
+random's 0.331 — is honest evidence that the loop optimizes its reward. It is not
+evidence of lead optimization. Read the two claims separately from here on.
+
+This also settles what to build next. A structural-alert penalty would block the
+hydrazine and the agent would price the next motif; the diagnostic that would have
+justified building it is the paragraph above, already measured. **The fragment
+vocabulary is the fix**, for the reason it was the fix at Step 3 and is now the fix
+twice: an alert is a term the agent trades against predicted pIC50, and a vocabulary has
+no exchange rate. No fragment drawn from measured inhibitors is a pentazane, so no
+sequence of attachments builds one.
+
+SA stays in the plan for what it does measure, and out of the critical path.
+
+## Step 6 — SA soft penalty
 
 ```python
-def test_penalty_decreases_with_violations():
-    # hand-picked: 0, 1, and 4 violations respectively
+def test_penalty_decreases_with_synthetic_difficulty():
+    # hand-picked: SA roughly 1.4, 3.0 and 7.9 — one ring, a fused lead, a macrocycle
     r = [reward_shaping(m) for m in [aspirin, atorvastatin, cyclosporine]]
     assert r[0] > r[1] > r[2]
+
+def test_an_easy_molecule_pays_nothing():
+    assert reward_shaping(aspirin) == pytest.approx(reward(aspirin))
 ```
-Use real drugs with known descriptor values — they double as documentation.
+Use real drugs with known descriptor values — they double as documentation. The
+second test is the one that matters: a penalty that fires below the target charges
+the agent for chemistry it has not done yet, and the reward stops meaning pIC50.
+
+### Measured before building it: SA does not catch what Step 5 found
+
+Run on the Step 5 top 12 before writing the penalty, because a guardrail aimed at the
+wrong failure is worse than none — it costs reward and buys nothing.
+
+| | SA score |
+|---|---|
+| seed 0 | 2.05 |
+| Step 5 top 12 | 3.05 to 3.49, mean 3.26 |
+| 400 BindingDB EGFR compounds | mean 2.38, 90th percentile 2.66, max 4.24 |
+| 400 ZINC molecules | mean 2.98, 90th percentile 4.07, max 5.95 |
+
+**The tetrazane chains score as easier to make than a tenth of the ZINC catalogue.** SA
+is a fragment-frequency and complexity score, and a short acyclic N–N–N–N chain is
+neither rare-by-fragment nor complex. It does not rank within the group either: the
+molecule carrying six N–N bonds scores 3.10 and one carrying three scores 3.35. A
+threshold low enough to fire on 3.26 would also fire on real EGFR inhibitors, whose
+own scores reach 4.24.
+
+A curated structural alert does catch it. RDKit's Brenk catalogue flags 11 of the 12,
+and its `hydrazine` alert alone fires on exactly the seven molecules with a
+non-aromatic N–N bond. But the whole catalogue is too blunt to use as a reward term —
+it flags 32% of the BindingDB EGFR compounds, and flags the seed itself, for `aniline`.
+So: specific alerts, chosen and justified one at a time, not a catalogue.
+
+SA stays worth having for the failure it does measure. It is not the answer to Step 5's.
 
 ## Step 7 — Climb the algorithm ladder
 
@@ -929,7 +1182,7 @@ one on the same scaffold split. If pretraining doesn't win, say so and drop it �
 clean null result costs nothing to report and a lot to hide.
 
 Then the actual deliverable, per seed scaffold: top-k analogs with predicted pIC50,
-the seed's own pIC50 for reference, Lipinski and SA status, Tanimoto to seed, and a
+the seed's own pIC50 for reference, SA score, Tanimoto to seed, and a
 docking spot-check on the best few. Diversity and novelty reported alongside top-k,
 never instead of it.
 
