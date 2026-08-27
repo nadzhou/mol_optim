@@ -14,18 +14,22 @@ import pytest
 import torch
 
 from mol_optim import config, environment, featurize, pretrain, zinc
+from tests import conftest
 
 CFG = config.Config()
-# Skipped before MOLECULES is evaluated: a missing download has to skip the file,
-# not error out of collection.
-if not zinc.DATA_PATH.exists():
-    pytest.skip(
-        f"{zinc.DATA_PATH} is missing; download it with: python -m mol_optim.zinc",
-        allow_module_level=True,
-    )
-# Enough molecules for a few hundred gradient steps, and 0.2 s to parse.
-MOLECULES = zinc.molecules(limit=4000)
 SMALL = config.PretrainConfig(num_holdout=1000, epochs=3)
+
+
+@pytest.fixture(scope="module")
+def molecules() -> tuple:
+    """Enough molecules for a few hundred gradient steps, and 0.2 s to parse.
+
+    A fixture rather than a module constant so that only the tests which actually read
+    ZINC skip when it has not been downloaded. The checkpoint tests below do not, and
+    they are the ones worth running everywhere.
+    """
+    conftest.require(zinc.DATA_PATH, "python -m mol_optim.zinc")
+    return zinc.molecules(limit=4000)
 
 
 def rng(seed: int = 0) -> np.random.Generator:
@@ -33,9 +37,9 @@ def rng(seed: int = 0) -> np.random.Generator:
 
 
 @pytest.fixture(scope="module")
-def trained() -> pretrain.Result:
+def trained(molecules) -> pretrain.Result:
     """One 3-epoch run, shared by the tests that need a trained encoder."""
-    return pretrain.pretrain(CFG, SMALL, MOLECULES)
+    return pretrain.pretrain(CFG, SMALL, molecules)
 
 
 def test_the_head_cannot_see_the_masked_atom():
@@ -56,8 +60,8 @@ def test_the_head_cannot_see_the_masked_atom():
         assert torch.equal(logits[0], other)
 
 
-def test_masking_covers_the_requested_fraction():
-    graph_set = featurize.graphs(MOLECULES[:64])
+def test_masking_covers_the_requested_fraction(molecules):
+    graph_set = featurize.graphs(molecules[:64])
     num_atoms = len(graph_set.atom_codes)
     _, rows = pretrain.masked(graph_set, 0.15, rng(), CFG)
 
@@ -65,11 +69,11 @@ def test_masking_covers_the_requested_fraction():
     assert len(set(rows.tolist())) == len(rows)  # no atom masked twice
 
 
-def test_masking_leaves_the_graphs_it_was_given_alone():
+def test_masking_leaves_the_graphs_it_was_given_alone(molecules):
     # The targets are read off graph_set.atom_codes *after* the batch is built, so a
     # mask that reached back into the codes would zero the answers as well: the target
     # would become element 0, carbon, and 74% of the labels would silently be right.
-    graph_set = featurize.graphs(MOLECULES[:16])
+    graph_set = featurize.graphs(molecules[:16])
     before = graph_set.atom_codes.copy()
     pretrain.masked(graph_set, 0.15, rng(), CFG)
 
@@ -78,8 +82,8 @@ def test_masking_leaves_the_graphs_it_was_given_alone():
     assert float(unmasked.atom_features.sum()) == len(before) * len(featurize.ATOM_BLOCKS)
 
 
-def test_the_prior_is_the_element_distribution_and_nothing_else():
-    codes = featurize.graphs(MOLECULES[:500]).atom_codes
+def test_the_prior_is_the_element_distribution_and_nothing_else(molecules):
+    codes = featurize.graphs(molecules[:500]).atom_codes
     prior = pretrain.marginal(codes, codes)
 
     # ZINC is about 74% carbon; the accuracy of always saying carbon is the number an
