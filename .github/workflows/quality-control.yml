@@ -1,8 +1,5 @@
 name: quality control
-
 on:
-  push:
-    paths-ignore: ["**/*.md", "results/**", "docs/**"]
   pull_request:
     paths-ignore: ["**/*.md", "results/**", "docs/**"]
   workflow_dispatch:
@@ -26,15 +23,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      # Before the editable install, so the CPU build is what satisfies torch and pip
-      # never reaches for the CUDA one.
       - name: Install torch, CPU only
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install
         run: pip install -e ".[dev]"
 
-      # -rs so a green run says which tests were skipped for want of a dataset, rather
-      # than only how many passed.
       - name: Run the suite
         run: pytest -m "not slow" -q -rs
