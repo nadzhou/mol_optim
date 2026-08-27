@@ -1,0 +1,64 @@
+# The test suite, on free runners.
+#
+# The suite is deliberately small — it covers the core pipeline and nothing else — so
+# CI runs all of it. `-m "not slow"` leaves out only the training gates, which need a
+# run to mean anything; those are the local `pytest -m slow`.
+#
+# Two things keep this fast. Torch comes from the CPU index — the default PyPI wheel
+# is 526 MB and drags in ~2 GB of nvidia-* CUDA packages that nothing here can use.
+# And a fresh checkout has neither download, so the tests that need one skip rather
+# than fail (tests/conftest.py); only ZINC, 12 MB and cached, is worth fetching.
+name: quality control
+
+on:
+  push:
+    paths-ignore: ["**/*.md", "results/**", "docs/**"]
+  pull_request:
+    paths-ignore: ["**/*.md", "results/**", "docs/**"]
+  workflow_dispatch:
+
+# A second push to the same branch cancels the first: no minutes spent finishing a run
+# whose answer is already stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Before the editable install, so the CPU build is what satisfies torch and pip
+      # never reaches for the CUDA one.
+      - name: Install torch, CPU only
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # Keyed on zinc.py because the URL and the pinned digest live there: change the
+      # pin and the old file is no longer the right one to reuse.
+      - name: Cache the ZINC download
+        uses: actions/cache@v4
+        with:
+          path: data/zinc.tab
+          key: zinc-${{ hashFiles('mol_optim/zinc.py') }}
+
+      # Best effort. Harvard Dataverse being down is not a reason to fail a commit —
+      # the pretraining tests skip and the rest of the suite still runs.
+      - name: Download ZINC
+        continue-on-error: true
+        run: python -m mol_optim.zinc
+
+      # -rs so a green run says which tests were skipped for want of a dataset, rather
+      # than only how many passed.
+      - name: Run the suite
+        run: pytest -m "not slow" -q -rs
