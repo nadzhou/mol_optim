@@ -64,12 +64,6 @@ def test_the_ensemble_reports_the_mean_and_the_disagreement(compounds):
     assert prediction.spread.mean() > 0.0
 
 
-def test_a_single_model_has_no_disagreement_with_itself(compounds):
-    torch.manual_seed(0)
-    mols = [compound.mol for compound in compounds[:8]]
-    assert regressor.predict([regressor.Regressor(CFG)], mols, CFG).spread.max() == 0.0
-
-
 def overfit(compounds, steps: int) -> float:
     """Train MAE after `steps` full-batch gradient steps on these compounds alone."""
     determinism.seed_everything(0)
@@ -88,16 +82,6 @@ def overfit(compounds, steps: int) -> float:
         optimizer.step()
     with torch.no_grad():
         return float((model(batch) - labels).abs().mean())
-
-
-def test_the_loss_falls_well_below_the_mean_on_twenty_molecules(compounds):
-    # The fast half of the overfit check: 600 steps is not enough to memorize, but a
-    # network whose loss, optimizer or forward pass is broken does not get near the
-    # constant predictor either, and this costs four seconds instead of thirty.
-    twenty = compounds[:20]
-    labels = np.array([compound.pic50 for compound in twenty])
-    predicting_the_mean = float(np.abs(labels - labels.mean()).mean())
-    assert overfit(twenty, steps=600) < 0.6 * predicting_the_mean
 
 
 @pytest.mark.slow

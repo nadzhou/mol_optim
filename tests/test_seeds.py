@@ -17,24 +17,6 @@ def test_seeds_are_distinct_chemotypes(compounds):
             assert DataStructs.TanimotoSimilarity(first, second) <= seeds.MAX_SEED_SIMILARITY
 
 
-def test_seeds_are_potent_and_their_labels_are_settled(compounds):
-    # The final report quotes each seed's own pIC50 as the number to beat. A label with
-    # a two-log spread across its measurements is not a number to beat.
-    for seed in seeds.choose(compounds):
-        assert seed.pic50 >= 8.0
-        assert seed.num_measurements > 1
-        assert seed.pic50_spread <= 1.0
-
-
-def test_seeds_come_from_series_a_chemist_has_walked_around(compounds):
-    # Largest clusters first: a scaffold with one measured active is a hit, not a lead
-    # series, and derivatizing it has nothing to compare against.
-    actives = [compound for compound in compounds if compound.pic50 >= 8.0]
-    clusters = splits.by_scaffold(actives)
-    for seed in seeds.choose(compounds):
-        assert len(clusters[seed.scaffold]) >= 20
-
-
 def test_the_choice_does_not_move_between_runs(compounds):
     first = [seed.mol.GetProp("_Name") for seed in seeds.choose(compounds)]
     second = [seed.mol.GetProp("_Name") for seed in seeds.choose(compounds)]

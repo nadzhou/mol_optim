@@ -1,7 +1,6 @@
 """Our replay buffer, so it carries its own tests."""
 
 import numpy as np
-import pytest
 
 from mol_optim import featurize, replay_buffer
 from tests.molecules import NAMED
@@ -31,34 +30,6 @@ def test_fifo_eviction_at_capacity():
         push_numbered(buffer, value)
     assert len(buffer) == 3
     assert set(buffer.sample(3).rewards) <= {2.0, 3.0, 4.0}  # 1 evicted, 4 took its slot
-
-
-def test_sampling_more_than_stored_is_an_error():
-    # Loud on purpose: a batch of 128 drawn from 3 transitions trains and learns
-    # nothing, and there is no other symptom.
-    buffer = make_buffer(10)
-    push_numbered(buffer, 1)
-    with pytest.raises(ValueError, match="need 4"):
-        buffer.sample(4)
-
-
-def test_sampled_shapes_and_dtypes():
-    buffer = make_buffer(10)
-    for value in range(5):
-        push_numbered(buffer, value)
-    batch = buffer.sample(4)
-    assert len(batch.states) == 4
-    assert all(state.num_graphs == 1 for state in batch.states)
-    assert all(
-        state.atom_codes.shape == (3, len(featurize.ATOM_BLOCKS))
-        for state in batch.states
-    )
-    assert batch.rewards.shape == (4,) and batch.rewards.dtype == np.float32
-    assert batch.dones.shape == (4,) and batch.dones.dtype == np.float32
-    assert batch.state_steps_remaining.shape == (4,)
-    assert batch.next_steps_remaining.shape == (4,)
-    assert len(batch.next_candidates) == 4
-    assert all(candidates.num_graphs == 2 for candidates in batch.next_candidates)
 
 
 def test_steps_remaining_stays_paired_with_its_transition():

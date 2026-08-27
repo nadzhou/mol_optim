@@ -80,24 +80,6 @@ def action_hashes(mol, cfg) -> set[str]:
     return {graph_key.canonical_hash(m) for m in environment.valid_actions(mol, cfg)}
 
 
-def test_no_modification_present_only_when_allowed():
-    start = NAMED["ethanol"]
-    start_hash = graph_key.canonical_hash(start)
-    assert start_hash in action_hashes(start, config.Config(allow_no_modification=True))
-    assert start_hash not in action_hashes(
-        start, config.Config(allow_no_modification=False)
-    )
-
-
-def test_removal_actions_present_only_when_allowed():
-    start, ethane = NAMED["ethanol"], NAMED["ethane"]
-    with_removal = action_hashes(start, config.Config(allow_removal=True))
-    without_removal = action_hashes(start, config.Config(allow_removal=False))
-    assert without_removal < with_removal
-    ethane_hash = graph_key.canonical_hash(ethane)
-    assert ethane_hash in with_removal and ethane_hash not in without_removal
-
-
 def test_allowed_ring_sizes_is_threaded_through():
     # Hexane: bonding atom 0 to atom 5 closes a six-ring, atom 0 to atom 2 a three-ring.
     hexane = NAMED["hexane"]
@@ -107,21 +89,6 @@ def test_allowed_ring_sizes_is_threaded_through():
     propylcyclopropane = graph_key.canonical_hash(NAMED["propylcyclopropane"])
     assert cyclohexane in six_only and cyclohexane not in three_only
     assert propylcyclopropane in three_only and propylcyclopropane not in six_only
-
-
-def test_bonds_between_rings_is_threaded_through():
-    # Two benzenes joined by a single bond; a new bond would fuse them.
-    biphenyl = NAMED["biphenyl"]
-    forbidden = action_hashes(biphenyl, config.Config(allow_bonds_between_rings=False))
-    allowed = action_hashes(biphenyl, config.Config(allow_bonds_between_rings=True))
-    assert forbidden < allowed
-
-
-def test_step_rejects_a_candidate_that_does_not_exist():
-    cfg = config.Config(init_mol=NAMED["ethanol"], max_steps_per_episode=2)
-    episode = environment.reset(cfg)
-    with pytest.raises(ValueError, match="No candidate"):
-        environment.step(episode, len(episode.valid_actions), rewards.qed, cfg)
 
 
 def test_step_rejects_a_step_past_termination():

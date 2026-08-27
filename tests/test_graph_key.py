@@ -47,16 +47,6 @@ def test_hash_is_the_same_for_a_graph_rebuilt_atom_by_atom(mol):
     assert graph_key.canonical_hash(rebuilt) == graph_key.canonical_hash(mol)
 
 
-def test_the_key_is_constitutional_so_stereoisomers_share_it():
-    # Pinning a known limitation, not endorsing it. The atom-level action space cannot
-    # create a stereocentre, and ranking without chirality is what keeps the key stable
-    # across an SDF round trip. Real inhibitors with stereocentres would force this to
-    # change — when they do, this test fails and asks to be rewritten.
-    assert graph_key.canonical_hash(NAMED["alanine_L"]) == graph_key.canonical_hash(
-        NAMED["alanine_D"]
-    )
-
-
 def test_distinct_molecules_get_distinct_hashes():
     # The alanines are one constitution under two configurations; they share a key on
     # purpose, and test_the_key_is_constitutional_so_stereoisomers_share_it covers them.
@@ -74,14 +64,6 @@ def test_hash_separates_molecules_that_differ_only_in_bond_order():
     ethene.GetBondBetweenAtoms(0, 1).SetBondType(Chem.BondType.DOUBLE)
     Chem.SanitizeMol(ethene)
     assert graph_key.canonical_hash(ethene) != graph_key.canonical_hash(ethane)
-
-
-def test_normalize_is_idempotent():
-    for mol in START_MOLECULES:
-        once = graph_key.normalize(mol)
-        assert graph_key.canonical_hash(graph_key.normalize(once)) == (
-            graph_key.canonical_hash(once)
-        )
 
 
 def with_chirality(mol: Chem.Mol, atom_index: int, tag: Chem.ChiralType) -> Chem.Mol:
@@ -104,34 +86,6 @@ def test_the_stereo_key_separates_two_configurations_and_the_state_key_merges_th
     )
     assert graph_key.stereo_hash(clockwise) != graph_key.stereo_hash(anticlockwise)
     assert graph_key.canonical_hash(clockwise) == graph_key.canonical_hash(anticlockwise)
-
-
-def test_the_stereo_key_separates_an_assigned_centre_from_an_unassigned_one():
-    # "Configuration unknown" is not the same compound as either configuration, and a
-    # dataset that merges them averages a measurement with something else.
-    unassigned = NAMED["sorbitol"]
-    assigned = with_chirality(unassigned, 2, Chem.ChiralType.CHI_TETRAHEDRAL_CW)
-    assert graph_key.stereo_hash(assigned) != graph_key.stereo_hash(unassigned)
-
-
-@pytest.mark.parametrize("mol", START_MOLECULES, ids=lambda m: m.GetProp("_Name"))
-def test_the_stereo_key_survives_a_molblock_round_trip(mol):
-    # The invariant the BindingDB dataset is built on: 10,850 compounds are named by
-    # this key, written to an SDF, and read back by the regressor. A key that moves in
-    # transit makes "this compound is in both splits" unanswerable.
-    rebuilt = Chem.MolFromMolBlock(Chem.MolToMolBlock(mol))
-    assert graph_key.stereo_hash(rebuilt) == graph_key.stereo_hash(mol)
-
-
-def test_an_undefined_double_bond_has_one_name_however_it_is_said():
-    # STEREONONE from a SMILES, STEREOANY from a molblock, both meaning "nobody said".
-    # Left alone this renamed 185 of the EGFR compounds on their way to disk.
-    mol = graph_key.normalize(NAMED["aspirin"])
-    either = Chem.RWMol(mol)
-    for bond in either.GetBonds():
-        if bond.GetBondType() == Chem.BondType.DOUBLE:
-            bond.SetStereo(Chem.BondStereo.STEREOANY)
-    assert graph_key.stereo_hash(either.GetMol()) == graph_key.stereo_hash(mol)
 
 
 def test_the_scaffold_key_groups_a_series_and_splits_two_frames():

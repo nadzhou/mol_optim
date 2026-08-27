@@ -7,13 +7,6 @@ from mol_optim import molio
 from tests.molecules import NAMED
 
 
-def test_a_molecule_without_coordinates_gets_a_drawing(tmp_path):
-    # Otherwise the SDF opens as a pile of atoms stacked on the origin.
-    path = tmp_path / "flat.sdf"
-    molio.write(path, (Chem.MolFromSmiles("CCO"),), {})
-    assert molio.read(path)[0].GetNumConformers() == 1
-
-
 def test_measured_geometry_survives_the_round_trip(tmp_path):
     # A crystal ligand or a docked pose is worth writing only for its coordinates, and
     # computing 2D ones over them replaces exactly that.

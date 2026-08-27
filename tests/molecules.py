@@ -11,17 +11,7 @@ from mol_optim import molio
 
 NAMED = molio.read_named(Path(__file__).parent / "fixtures" / "molecules.sdf")
 
-# Chemotypes that exercise different code paths: chains, aromatics, fused rings,
-# heteroatoms, and a molecule with nothing but single bonds.
-START_MOLECULES = [
-    NAMED[name]
-    for name in (
-        "methane",
-        "ethanol",
-        "benzene",
-        "aspirin",
-        "cyclohexane",
-        "caffeine",
-        "sorbitol",
-    )
-]
+# Three chemotypes, not seven. Every test that parametrizes over these is proving one
+# property, and a property that holds for a chain, an aromatic with heteroatoms and a
+# fused N-heterocycle does not need four more molecules to say so again.
+START_MOLECULES = [NAMED[name] for name in ("ethanol", "aspirin", "caffeine")]

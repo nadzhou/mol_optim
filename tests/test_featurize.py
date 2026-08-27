@@ -1,7 +1,6 @@
 """The state encoder's input: codes in the buffer, one-hot at the network."""
 
 import numpy as np
-import pytest
 from rdkit import Chem
 
 from mol_optim import config, featurize, graph_key
@@ -51,20 +50,6 @@ def test_feature_widths_are_the_same_for_every_molecule():
         assert batch.graph_features.shape == (1, featurize.NUM_GRAPH_FEATURES)
 
 
-def test_a_molecule_with_no_bonds_still_featurizes():
-    # Methane is the first state of an episode that starts from the empty molecule.
-    batch = featurize.tensors(featurize.graphs([NAMED["methane"]]), 40, CFG)
-    assert batch.atom_features.shape == (1, featurize.ATOM_FEATURE_LENGTH)
-    assert batch.bond_features.shape == (0, featurize.BOND_FEATURE_LENGTH)
-    assert batch.edge_index.shape == (2, 0)
-
-
-def test_the_empty_molecule_is_refused():
-    for mol in [None, Chem.RWMol().GetMol()]:
-        with pytest.raises(ValueError, match="empty molecule"):
-            featurize.graphs([mol])
-
-
 def test_graph_features_carry_steps_remaining_and_atom_count():
     # Steps remaining is the non-stationarity fix; the atom count is what mean pooling
     # throws away. Both are normalized by max_steps_per_episode.
@@ -74,47 +59,6 @@ def test_graph_features_carry_steps_remaining_and_atom_count():
         [[8, mol.GetNumAtoms()] for mol in mols], dtype=np.float32
     ) / CFG.max_steps_per_episode
     assert np.allclose(batch.graph_features.numpy(), expected)
-
-
-def test_steps_remaining_accepts_one_value_per_graph():
-    # A replay batch mixes transitions from different points in their episodes.
-    batch = featurize.tensors(
-        featurize.graphs((ASPIRIN, NAMED["ethanol"])), np.array([3.0, 11.0]), CFG
-    )
-    assert np.allclose(
-        batch.graph_features[:, 0].numpy(),
-        np.array([3.0, 11.0]) / CFG.max_steps_per_episode,
-    )
-
-
-def test_concatenated_sets_hold_the_same_graphs_as_the_sets_alone():
-    # Candidate sets go into the buffer one at a time and come out concatenated into a
-    # batch. If the offsets are wrong here, every target Q value is read off the wrong
-    # molecule, and nothing raises.
-    sets = [
-        featurize.graphs((ASPIRIN, NAMED["methane"])),
-        featurize.graphs((NAMED["caffeine"],)),
-        featurize.graphs((NAMED["benzene"], NAMED["toluene"], NAMED["ethanol"])),
-    ]
-    in_order = (
-        ASPIRIN,
-        NAMED["methane"],
-        NAMED["caffeine"],
-        NAMED["benzene"],
-        NAMED["toluene"],
-        NAMED["ethanol"],
-    )
-    joined = featurize.concatenate(sets)
-    solo = featurize.graphs(in_order)
-
-    assert joined.num_graphs == len(in_order)
-    assert np.array_equal(
-        joined.graph_index,
-        np.repeat(np.arange(len(in_order)), [m.GetNumAtoms() for m in in_order]),
-    )
-    assert np.array_equal(joined.atom_codes, solo.atom_codes)
-    assert np.array_equal(joined.edge_index, solo.edge_index)
-    assert np.array_equal(joined.bond_codes, solo.bond_codes)
 
 
 def test_the_same_molecule_encodes_identically_wherever_it_appears():

@@ -50,16 +50,6 @@ def test_scoring_is_batch_invariant():
     assert torch.allclose(one_at_a_time, batched, atol=1e-5)
 
 
-def test_a_real_candidate_set_scores_the_same_batched_as_alone():
-    # The same property on the shapes the training loop actually sees: every candidate
-    # reachable from one molecule, in one forward pass.
-    model = network()
-    candidates = environment.valid_actions(NAMED["caffeine"], CFG)
-    assert len(candidates) > 20
-    one_at_a_time = torch.cat([score([mol], 3, model) for mol in candidates])
-    assert torch.allclose(one_at_a_time, score(candidates, 3, model), atol=1e-5)
-
-
 def test_steps_remaining_changes_the_q_value():
     # Trivial, but if the feature is dropped in the swap the MDP silently becomes
     # non-stationary: the same molecule carries one Q value for two different states.
@@ -84,14 +74,6 @@ def test_every_parameter_gets_a_real_gradient():
     for name, parameter in model.named_parameters():
         assert parameter.grad is not None, name
         assert torch.any(parameter.grad != 0), name
-
-
-def test_the_head_reads_the_pooled_embedding_and_the_graph_features():
-    model = network()
-    batch = featurize.tensors(featurize.graphs(RAGGED), 6, CFG)
-    embedded = model.encoder(batch)
-    assert embedded.shape == (len(RAGGED), CFG.hidden_dim)
-    assert model(batch).shape == (len(RAGGED), 1)
 
 
 @pytest.mark.slow

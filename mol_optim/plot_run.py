@@ -16,6 +16,9 @@ import numpy as np
 
 def rolling_mean(values: np.ndarray, window: int) -> np.ndarray:
     """Trailing mean; the first `window - 1` points are means of what exists so far."""
+    # A run shorter than the window is the running mean throughout. Without this the
+    # default window of 100 cannot plot a run of fewer than 100 episodes.
+    window = min(window, len(values))
     cumulative = np.cumsum(np.insert(values, 0, 0.0))
     full = (cumulative[window:] - cumulative[:-window]) / window
     head = cumulative[1:window] / np.arange(1, window)

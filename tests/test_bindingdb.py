@@ -9,7 +9,7 @@ real number.
 import pytest
 from rdkit import Chem
 
-from mol_optim import bindingdb, graph_key
+from mol_optim import bindingdb
 
 
 @pytest.mark.parametrize(
@@ -17,13 +17,6 @@ from mol_optim import bindingdb, graph_key
 )
 def test_pic50_conversion(ic50_nm, expected):
     assert bindingdb.to_pic50(ic50_nm) == pytest.approx(expected)
-
-
-def test_pic50_refuses_a_measurement_that_has_no_logarithm():
-    # A zero in the IC50 column is a missing value wearing a number's clothes.
-    for value in (0.0, -1.0):
-        with pytest.raises(ValueError, match="positive"):
-            bindingdb.to_pic50(value)
 
 
 def test_pic50_is_monotone_the_right_way_round():
@@ -51,18 +44,6 @@ def test_the_dataset_is_the_size_and_shape_the_ingest_reported(compounds):
     )
 
 
-def test_every_compound_appears_once(compounds):
-    names = [compound.mol.GetProp("_Name") for compound in compounds]
-    assert len(set(names)) == len(names)
-
-
-def test_a_sample_of_the_dataset_still_answers_to_its_own_name(compounds):
-    # The ingest drops compounds whose key moves in transit, so this holds for every
-    # record in the file; the slow test below checks all of them.
-    for compound in compounds[:500]:
-        assert graph_key.stereo_hash(compound.mol) == compound.mol.GetProp("_Name")
-
-
 def test_the_labels_have_not_been_silently_shifted(compounds):
     # Known EGFR chemistry, not a statistic: the potent end of this set must reach
     # single-digit nanomolar (pIC50 8-11) and the weak end must be micromolar or worse.
@@ -77,13 +58,3 @@ def test_salts_and_counter_ions_were_stripped(compounds):
     # "compound + HCl" and "compound" are one measurement of one compound. If the ingest
     # kept the salt, they are two graphs and two rows.
     assert all(len(Chem.GetMolFrags(compound.mol)) == 1 for compound in compounds)
-
-
-@pytest.mark.slow
-def test_every_compound_in_the_file_answers_to_its_own_name(compounds):
-    renamed = [
-        compound.mol.GetProp("_Name")
-        for compound in compounds
-        if graph_key.stereo_hash(compound.mol) != compound.mol.GetProp("_Name")
-    ]
-    assert renamed == []

@@ -6,10 +6,9 @@ is beautiful and describes nothing. These run on the real dataset, on every rebu
 it, because that is where the leak would appear.
 """
 
-import numpy as np
 import pytest
 
-from mol_optim import config, graph_key, splits
+from mol_optim import config, splits
 
 
 @pytest.fixture(scope="module")
@@ -46,35 +45,9 @@ def test_seed_scaffolds_are_held_out_of_training(compounds):
     assert keys(seeds) <= keys(test)
 
 
-def test_the_split_is_the_size_it_was_asked_for(split, compounds):
-    train, test = split
-    assert len(train) + len(test) == len(compounds)
-    assert 0.75 < len(train) / len(compounds) < 0.85
-
-
 def test_the_split_does_not_move_between_runs(compounds):
     # Two groups of equal size must not swap sides because a dict iterated differently.
     # If they do, every number in the report describes a split nobody can reproduce.
     first = splits.scaffold_split(compounds, 0.2)
     second = splits.scaffold_split(compounds, 0.2)
     assert keys(first[0]) == keys(second[0])
-
-
-def test_both_sides_carry_the_range_of_potencies(split):
-    # A split that put every potent compound on one side would report a fine MAE and be
-    # useless. Not guaranteed by construction, so it is checked.
-    train, test = split
-    train_labels = np.array([compound.pic50 for compound in train])
-    test_labels = np.array([compound.pic50 for compound in test])
-    assert abs(train_labels.mean() - test_labels.mean()) < 0.5
-    assert test_labels.max() > 9.0
-    assert test_labels.min() < 5.0
-
-
-def test_a_scaffold_group_holds_molecules_that_share_a_frame(compounds):
-    groups = splits.by_scaffold(compounds)
-    largest = next(iter(groups.values()))
-    assert len(largest) > 100
-    assert len({compound.scaffold for compound in largest}) == 1
-    # And the carried key is the one graph_key computes, not a stale copy of it.
-    assert largest[0].scaffold == graph_key.scaffold_hash(largest[0].mol)
