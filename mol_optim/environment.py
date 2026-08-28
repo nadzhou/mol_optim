@@ -18,6 +18,10 @@ from rdkit import Chem
 
 from mol_optim import config, graph_key
 
+# Nitrogen bonded to nitrogen, neither in a ring. Hydrazides and ring N-N are real
+# chemistry; an acyclic chain of them is what the agent builds and nothing else does.
+ACYCLIC_NN = Chem.MolFromSmarts("[#7;!R]-[#7;!R]")
+
 
 @dataclass(frozen=True)
 class Result:
@@ -157,10 +161,37 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
                     if len(fragments) == 1 or fragments[0].GetNumAtoms() == 1:
                         candidates.append(fragments[-1])
 
+    # Fragment attachment: hang a precedented group off any atom with a free valence.
+    # An atom-level edit can build a pentazane one nitrogen at a time; this edit can
+    # only build what was cut out of a measured active.
+    for fragment in cfg.fragments:
+        offset = mol.GetNumAtoms()
+        for atom_idx in atoms_with_free_valence.get(1, ()):
+            candidate = Chem.RWMol(Chem.CombineMols(mol, fragment.mol))
+            candidate.AddBond(
+                atom_idx, offset + fragment.attachment_idx, Chem.BondType.SINGLE
+            )
+            if Chem.SanitizeMol(candidate, catchErrors=True):
+                continue
+            candidates.append(candidate.GetMol())
+
     if cfg.allow_no_modification:
         candidates.append(Chem.Mol(mol))
 
+    if cfg.forbid_acyclic_nn:
+        candidates = [c for c in candidates if not _has_acyclic_nn(c)]
+
     return _deduplicated(candidates)
+
+
+def _has_acyclic_nn(candidate: Chem.Mol) -> bool:
+    """Does this graph carry an N-N bond outside a ring?
+
+    FastFindRings first: the `!R` query reads ring membership, and a candidate built by
+    RWMol copy has no perceived rings yet, which raises rather than returning False.
+    """
+    Chem.FastFindRings(candidate)
+    return candidate.HasSubstructMatch(ACYCLIC_NN)
 
 
 def _deduplicated(candidates: list[Chem.Mol]) -> tuple[Chem.Mol, ...]:

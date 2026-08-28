@@ -51,7 +51,7 @@ loop optimizes its reward. Telling those apart is what this repo is for, and
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -m "not slow"   # 166 tests, about 15 seconds
+pytest -m "not slow"   # 106 tests, about 12 seconds
 ```
 
 Then the whole pipeline, from download to figures:
@@ -62,26 +62,19 @@ Then the whole pipeline, from download to figures:
 
 About 25 minutes of compute, plus a 605 MB download the first time. Each fetch is
 pinned by checksum, so a silently changed upstream file fails loudly instead of quietly
-moving your numbers. Runs write into `runs/`, which is not tracked; the plots worth
-keeping are copied into `results/`. [docs/running.md](docs/running.md) breaks the script
-into its five steps with timings, and explains the flags worth changing.
+moving your numbers. Runs write into `runs/`, which is not tracked; the figures and
+[results/report.md](results/report.md) are written into `results/` by the last two steps,
+so regenerating them is the same command as running the pipeline.
+[docs/running.md](docs/running.md) breaks the script into its steps with timings, and
+explains the flags worth changing.
 
 ## Where things are
 
 - [mol_optim/](mol_optim/README.md) — what each module is, and where to start reading
 - [docs/running.md](docs/running.md) — every command, with timings
+- [results/report.md](results/report.md) — the top-k tables and their audit, generated
 - [results/](results/README.md) — the figures and the numbers
-
-## Working on this repo with Claude Code
-
-**Claude does not write to git. The maintainer makes every commit.**
-
-No `git commit`, no `git merge`, no `git rebase`, no rewriting history, no `git push`, no
-branches or tags, no pull requests. Claude edits files in the working tree and stops
-there — `git add` and everything after it is done by hand.
-
-This includes merge commits and the co-author trailer that comes with them: nothing
-Claude does should put a second name on a commit or in the repo's contributor list.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how commits work here, and the size budget
 
 ## License
 

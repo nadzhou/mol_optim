@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The whole pipeline, from an empty checkout to the figures in results/.
+# The whole pipeline, from an empty checkout to results/report.md.
 #
 # About 25 minutes of compute after the downloads. Each step writes a checkpoint the next
 # one reads, so you can comment out what you have already run.
@@ -34,16 +34,22 @@ python -m mol_optim.train_dqn --episodes 1000 --reward pic50 \
   --seed-molecule 0 --max-steps 6 \
   --pretrained-encoder models/zinc_encoder.pt \
   --regressor models/egfr_regressor.pt \
-  --log runs/pilot.csv --checkpoint runs/pilot.pt --top-k runs/pilot_top | tee runs/pilot.out
+  --log runs/pilot.csv --checkpoint runs/pilot.pt --top-k runs/pilot_pic50_seed0_top | tee runs/pilot.out
 
 echo "==> what did it actually build?"
-python -m mol_optim.audit runs/pilot_top.sdf --seed-molecule 0 | tee runs/pilot_audit.out
+python -m mol_optim.audit runs/pilot_pic50_seed0_top.sdf --seed-molecule 0 | tee runs/pilot_audit.out
 
-echo "==> drawing the curves"
-python -m mol_optim.plot_pretrain runs/pretrain_zinc.csv --out runs/pretrain_curve.png
-python -m mol_optim.plot_regressor models/egfr_regressor.pt --out runs/regressor.png
-python -m mol_optim.plot_run runs/pilot.csv --out runs/pilot.png --random-baseline 0.331
+echo "==> drawing the curves, straight into results/"
+python -m mol_optim.plot_pretrain runs/pretrain_zinc.csv \
+  --out results/zinc-pretraining/pretrain_curve.png
+python -m mol_optim.plot_regressor models/egfr_regressor.pt \
+  --out results/pic50-regressor/regressor.png
+python -m mol_optim.plot_run runs/pilot.csv \
+  --out results/pic50-agent/pilot_pic50_seed0.png --random-baseline 0.331
+
+echo "==> the report"
+python -m mol_optim.report --out results/report.md
 
 echo
-echo "done. figures and the top-k drawing are in runs/;"
-echo "the audit above is the part that says whether the reward curve means anything."
+echo "done. results/report.md is the deliverable; the audit above and the tables in it"
+echo "are the part that says whether the reward curve means anything."

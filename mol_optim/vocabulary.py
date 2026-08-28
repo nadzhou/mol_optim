@@ -13,7 +13,7 @@ core, and inserting one is a different edit from hanging a group off a free vale
 that edit is not in this action space.
 
 Run once:
-    .venv/bin/python -m mol_optim.vocabulary --out data/egfr_fragments.sdf
+    python3 -m mol_optim.vocabulary --out data/egfr_fragments.sdf
 """
 
 from collections import Counter
@@ -24,7 +24,7 @@ from typing import Sequence
 from rdkit import Chem
 from rdkit.Chem import BRICS
 
-from mol_optim import bindingdb, graph_key, molio
+from mol_optim import bindingdb, featurize, graph_key, molio
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,15 @@ def build(
             if len(dummies) != 1:
                 continue
             if piece.GetNumHeavyAtoms() - 1 > max_heavy_atoms:
+                continue
+            # featurize.ATOM_TYPES is the limit. An element outside it reaches the
+            # network as the untrained "other" bucket, indistinguishable from any other
+            # unknown element, so it does not belong in the action space.
+            if any(
+                atom.GetSymbol() not in featurize.ATOM_TYPES
+                for atom in piece.GetAtoms()
+                if atom.GetAtomicNum() != 0  # the BRICS dummy
+            ):
                 continue
             # Hashed with the dummy still on, so a meta and a para attachment of one
             # ring are two fragments rather than one.

@@ -23,6 +23,14 @@ class Config:
     allow_bonds_between_rings: bool = False
     # 3- and 4-rings are strained and drag QED down; the published config leaves them out.
     allowed_ring_sizes: tuple[int, ...] = (5, 6)
+    # Precedented decorations from vocabulary.load(), attachable at any free valence.
+    # Empty means atom-level edits only, which is what every number in results/ was
+    # measured on. Typed loosely to keep config.py free of package imports.
+    fragments: tuple = ()
+    # Reject candidates carrying a nitrogen-nitrogen bond outside a ring. Costs 1.2% of
+    # measured EGFR actives and removes the polyazane chains the agent reaches for --
+    # a constraint it cannot price, unlike a reward penalty.
+    forbid_acyclic_nn: bool = False
     max_steps_per_episode: int = 40
     # Only the molecule at the end of an episode counts, so an intermediate reward is
     # discounted by discount_factor ** steps_remaining. This is the *environment's*
@@ -97,3 +105,29 @@ class RegressorConfig:
     # Five networks, different seeds, same data. The mean is the prediction and the
     # spread is what the reward subtracts to stay pessimistic where the model guesses.
     ensemble_size: int = 5
+
+
+@dataclass(frozen=True)
+class PPOConfig:
+    """Every knob for PPO on the molecule MDP.
+
+    Alongside Config for the same reason the others are: the encoder's shape and the
+    MDP's discounting stay in Config, so DQN and PPO run the same environment and load
+    the same ZINC checkpoint. Only what is specific to the algorithm lives here.
+    """
+
+    seed: int = 0
+    # Episodes per policy update. Short episodes (6 edits on pIC50) make a single
+    # episode far too small a batch to estimate an advantage from.
+    rollout_episodes: int = 16
+    update_epochs: int = 4
+    minibatch_steps: int = 32
+    clip_epsilon: float = 0.2
+    gae_lambda: float = 0.95
+    value_coefficient: float = 0.5
+    # The candidate set is large and the policy is a softmax over it, so collapse is the
+    # failure mode. Small, but not zero.
+    entropy_coefficient: float = 0.01
+    # 3e-4, not the DQN's 1e-4: PPO's clipped objective bounds its own step size.
+    learning_rate: float = 3e-4
+    grad_clip_norm: float = 10.0

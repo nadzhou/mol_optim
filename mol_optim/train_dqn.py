@@ -28,6 +28,7 @@ from mol_optim import (
     reward_pic50,
     rewards,
     seeds,
+    vocabulary,
 )
 
 
@@ -264,6 +265,17 @@ if __name__ == "__main__":
         default=None,
         help="a ZINC AttrMask checkpoint from mol_optim.pretrain",
     )
+    parser.add_argument(
+        "--fragments",
+        type=Path,
+        default=None,
+        help="a vocabulary SDF; adds fragment-attachment actions to the atom-level ones",
+    )
+    parser.add_argument(
+        "--forbid-acyclic-nn",
+        action="store_true",
+        help="drop candidates carrying a non-ring nitrogen-nitrogen bond",
+    )
     args = parser.parse_args()
 
     init_mol = None
@@ -288,6 +300,10 @@ if __name__ == "__main__":
             seed=args.seed,
             init_mol=init_mol,
             max_steps_per_episode=args.max_steps,
+            fragments=(
+                () if args.fragments is None else vocabulary.load(args.fragments)
+            ),
+            forbid_acyclic_nn=args.forbid_acyclic_nn,
         ),
         reward_fn,
         log_path=args.log,
