@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from mol_optim import bindingdb, vocabulary
+from mol_optim import bindingdb
 
 
 def require(path: Path, command: str) -> None:
@@ -26,9 +26,3 @@ def require(path: Path, command: str) -> None:
 def compounds() -> tuple[bindingdb.Compound, ...]:
     require(bindingdb.DATASET_PATH, "python -m mol_optim.fetch_bindingdb")
     return bindingdb.load()
-
-
-@pytest.fixture(scope="session")
-def fragments() -> tuple[vocabulary.Fragment, ...]:
-    """The committed vocabulary, read off disk in a millisecond. Building it is 15 s."""
-    return vocabulary.load(Path("data/egfr_fragments.sdf"))

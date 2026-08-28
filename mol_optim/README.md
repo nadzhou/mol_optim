@@ -42,7 +42,6 @@ site tells you what runs.
 | `regressor.py` | the pIC50 network and the ensemble that predicts with a spread |
 | `train_regressor.py` | the regressor training loop, ensemble, and test report |
 | `pretrain.py` | masked-atom pretraining on ZINC; writes the shared encoder |
-| `finetune_zinc.py` | is the pretrained checkpoint a better place to start? |
 
 ## Run once, then forget
 

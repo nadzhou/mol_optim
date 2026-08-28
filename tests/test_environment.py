@@ -5,14 +5,12 @@ is garbage, and nothing crashes when it does. Random *action sequences* are wher
 bugs are, so the fuzz test walks whole episodes.
 """
 
-from pathlib import Path
-
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from rdkit import Chem
 
-from mol_optim import config, environment, graph_key, molio, rewards
+from mol_optim import config, environment, graph_key, rewards
 from tests.molecules import NAMED, START_MOLECULES
 
 
@@ -107,53 +105,3 @@ def test_empty_start_offers_one_atom_of_each_type():
     assert len(actions) == 3
     assert {mol.GetAtomWithIdx(0).GetSymbol() for mol in actions} == {"C", "O", "N"}
     assert all(mol.GetNumAtoms() == 1 for mol in actions)
-
-
-def test_fragments_add_attachment_actions_without_removing_atom_edits(fragments):
-    # The fragment space is a superset: a decoration the vocabulary knows is reachable
-    # in one edit, and every atom-level edit is still there beside it.
-    start = NAMED["aspirin"]
-    plain = config.Config(init_mol=start, max_steps_per_episode=6)
-    with_frags = config.Config(
-        init_mol=start, max_steps_per_episode=6, fragments=fragments
-    )
-    before = environment.valid_actions(start, plain)
-    after = environment.valid_actions(start, with_frags)
-
-    assert len(after) > len(before)
-    before_hashes = {graph_key.canonical_hash(m) for m in before}
-    after_hashes = {graph_key.canonical_hash(m) for m in after}
-    assert before_hashes <= after_hashes
-    # Attaching a fragment adds all of its heavy atoms at once, which no atom-level
-    # edit can do — that is the point of having them.
-    biggest = max(m.GetNumHeavyAtoms() for m in after)
-    assert biggest > max(m.GetNumHeavyAtoms() for m in before) + 1
-
-
-def test_the_acyclic_nn_filter_tells_a_hydrazine_from_a_pyrazole():
-    # The whole value of the rule is this distinction. A ring N-N is ordinary chemistry
-    # and appears in real EGFR actives; an acyclic chain of them is what the agent
-    # builds against a fitted reward and nothing else does.
-    motifs = molio.read_named(Path("tests/fixtures/audit_motifs.sdf"))
-    assert environment._has_acyclic_nn(motifs["phenylhydrazine"])
-    assert environment._has_acyclic_nn(motifs["tetrazane_chain"])
-    assert not environment._has_acyclic_nn(motifs["pyrazole"])
-
-
-def test_forbidding_acyclic_nn_removes_those_candidates_and_nothing_else():
-    # Paracetamol has an exocyclic amide nitrogen, so one edit can hang a second
-    # nitrogen off it — the cheapest way into the motif the filter exists to block.
-    start = NAMED["paracetamol"]
-    permissive = config.Config(init_mol=start, max_steps_per_episode=6)
-    strict = config.Config(
-        init_mol=start, max_steps_per_episode=6, forbid_acyclic_nn=True
-    )
-    loose = environment.valid_actions(start, permissive)
-    tight = environment.valid_actions(start, strict)
-
-    assert set(map(graph_key.canonical_hash, tight)) <= set(
-        map(graph_key.canonical_hash, loose)
-    )
-    assert not any(environment._has_acyclic_nn(m) for m in tight)
-    # The filter has to actually bite here, or this test proves nothing.
-    assert any(environment._has_acyclic_nn(m) for m in loose)

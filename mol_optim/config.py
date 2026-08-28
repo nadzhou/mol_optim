@@ -23,14 +23,6 @@ class Config:
     allow_bonds_between_rings: bool = False
     # 3- and 4-rings are strained and drag QED down; the published config leaves them out.
     allowed_ring_sizes: tuple[int, ...] = (5, 6)
-    # Precedented decorations from vocabulary.load(), attachable at any free valence.
-    # Empty means atom-level edits only, which is what every number in results/ was
-    # measured on. Typed loosely to keep config.py free of package imports.
-    fragments: tuple = ()
-    # Reject candidates carrying a nitrogen-nitrogen bond outside a ring. Costs 1.2% of
-    # measured EGFR actives and removes the polyazane chains the agent reaches for --
-    # a constraint it cannot price, unlike a reward penalty.
-    forbid_acyclic_nn: bool = False
     max_steps_per_episode: int = 40
     # Only the molecule at the end of an episode counts, so an intermediate reward is
     # discounted by discount_factor ** steps_remaining. This is the *environment's*
