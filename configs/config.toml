@@ -73,7 +73,7 @@ max_steps_per_episode = 6
 # [[agents]]
 # kind = "ppo"
 # name = "ppo_pic50_seed0"
-# # seed_molecule = 0
+# seed_molecule = 0
 # regressor = "models/egfr_regressor.pt"
 # pretrained_encoder = "models/zinc_encoder.pt"
 # report_every = 5
