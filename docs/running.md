@@ -22,10 +22,6 @@ Each downloads once and is pinned by checksum, so a silently changed upstream fi
 loudly instead of quietly moving your numbers. BindingDB arrives as a 9 GB table and is
 filtered down to one target's compounds.
 
-The fragment vocabulary is committed as `data/egfr_fragments.sdf`, because a run is not
-reproducible without the action space it was measured on. Rebuild it with
-`python -m mol_optim.vocabulary` if you change the dataset.
-
 ## 2. Pretrain the encoder on ZINC
 
 ```bash
@@ -94,28 +90,19 @@ whether the motifs in the audit are a property of the reward surface or of the
 algorithm that searched it. `--reward qed` is not available here: the value head reads
 a state graph, and a QED run starts from the empty molecule, which has none.
 
-## 4c. Constraining the action space
+## 4c. Episode budget
+
+`--max-steps 3` rather than 6 is the one change measured to improve recovery of real
+held-out compounds: 8 found against 7, and 2 measured actives against 0. It also cuts
+the N-N rate in the top-12 from 12/12 to 7/12. Shorter episodes keep the molecule near
+the seed, which is where its measured analogs are.
 
 ```bash
 python -m mol_optim.train_dqn --episodes 1000 --reward pic50 \
   --seed-molecule 0 --max-steps 3 \
   --pretrained-encoder models/zinc_encoder.pt --regressor models/egfr_regressor.pt \
-  --fragments data/egfr_fragments.sdf --forbid-acyclic-nn \
-  --log runs/dqn_frag_seed0.csv --top-k runs/dqn_frag_seed0_top
+  --log runs/dqn_atom3_seed0.csv --top-k runs/dqn_atom3_seed0_top
 ```
-
-`--fragments` adds fragment-attachment actions from the vocabulary alongside the
-atom-level edits; `--forbid-acyclic-nn` drops candidates carrying a non-ring N-N bond.
-Together they take the action space at the seed from 40 candidates to 534.
-
-**`--max-steps 3`, not 6.** A fragment attachment adds up to 12 heavy atoms where an
-atom edit adds one, so six of them reach 59 heavy atoms from a 19-atom seed and leave
-the regressor's applicability domain entirely — the reward goes to zero and the run
-learns nothing. Three fragment edits is the same size change as roughly six atom edits.
-
-Slower per step: 534 candidates are scored every step, and the DQN target is a max over
-each replayed next state's candidate set, so a gradient step reads ~69,000 graphs
-against the baseline's ~5,000. Expect ~30 minutes rather than ~5.
 
 ## 5. Look at what it built
 

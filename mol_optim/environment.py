@@ -3,7 +3,8 @@
 The state is an RDKit molecular graph and stays one for the whole episode. Nothing here
 writes or parses a molecule as text — candidates are built by editing an RWMol, and
 identity comes from graph_key.canonical_hash, taken off the graph itself. Molecules
-become text only at the boundary, in report.py, where a person looks at them.
+become text only at the boundary, in molio.py and results.top_k, where a person
+looks at them.
 
 Restyled from the reference implementation: the reward arrives as a function rather
 than a subclass override, and the three single-call action generators are inlined into

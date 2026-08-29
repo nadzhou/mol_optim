@@ -296,8 +296,6 @@ def train(
 if __name__ == "__main__":
     import argparse
 
-    from mol_optim import report
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--updates", type=int, default=60)
     parser.add_argument("--reward", choices=("qed", "pic50"), default="pic50")
@@ -367,5 +365,5 @@ if __name__ == "__main__":
         f"{graph_key.canonical_hash(best_molecule)}"
     )
     if args.top_k is not None:
-        report.top_k(run, args.top_k)
+        results.top_k(run, args.top_k)
         print(f"wrote {args.top_k}.png and {args.top_k}.sdf")
