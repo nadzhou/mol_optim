@@ -1,8 +1,7 @@
 """What a run returns, and the drawing of its best molecules.
 
-Plain data, shared by the DQN loop and the random baseline. `top_k` is here rather
-than in a reporting module because it is part of what a training run produces --
-both trainers write it behind `--top-k`.
+Plain data, shared by every agent. `top_k` lives here rather than in a reporting module
+because it is part of what a training run produces, not analysis done afterwards.
 """
 
 from dataclasses import dataclass

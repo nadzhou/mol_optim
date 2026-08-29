@@ -1,6 +1,6 @@
 # The whole pipeline, as data. Run it with:
 #
-#     mol-optim docs/config.toml
+#     mol-optim configs/config.toml
 #
 # Paths are relative to the directory you run that from — the repository root.
 # Every key below matches a field of a frozen dataclass in mol_optim/config.py; a key

@@ -1,18 +1,9 @@
 """Graph featurization: an RDKit molecule to the tensors the encoder reads.
 
-Molecules are stored as small integer *codes* — one int8 per feature per atom — and
-expanded to one-hot float32 only where a batch enters the network. The replay buffer
-holds a whole candidate set per transition, tens of thousands of sets; the codes cost
-13 bytes an atom against 48 for the one-hot, and the expansion is one vectorized
-scatter.
-
-Every categorical ends in an "other" bucket, so an atom or bond the tables do not name
-lands in a real column instead of an all-zero row or an exception in the middle of a
-run.
-
-The GNN encoder replaced the Morgan fingerprint that used to live here. The
-fingerprint path is deleted rather than kept behind a flag, so no reader has to trace a
-branch matrix; it stays reproducible from git history.
+Molecules are stored as int8 codes and expanded to one-hot float32 only where a batch
+enters the network — 13 bytes an atom against 48, which is what makes a replay buffer of
+tens of thousands of candidate sets fit. Every categorical ends in an "other" bucket, so
+an atom the tables do not name lands in a real column rather than an all-zero row.
 """
 
 import hashlib
@@ -136,7 +127,6 @@ class Batch:
 
 
 def graphs(mols: Sequence[Chem.Mol]) -> Graphs:
-    """Featurize molecules into one concatenated code block."""
     atom_codes: list[tuple] = []
     bond_codes: list[tuple] = []
     edges: list[tuple[int, int]] = []
@@ -172,7 +162,7 @@ def graphs(mols: Sequence[Chem.Mol]) -> Graphs:
 
 
 def _atom_code(atom: Chem.Atom, ring_info) -> tuple[int, ...]:
-    """One small integer per atom field, in ATOM_BLOCKS order."""
+    # One small integer per field, in ATOM_BLOCKS order.
     return (
         _index_of(atom.GetSymbol(), ATOM_TYPES),
         min(atom.GetDegree(), 5),
@@ -187,7 +177,7 @@ def _atom_code(atom: Chem.Atom, ring_info) -> tuple[int, ...]:
 
 
 def _bond_code(bond: Chem.Bond) -> tuple[int, ...]:
-    """One small integer per bond field, in BOND_BLOCKS order."""
+    # One small integer per field, in BOND_BLOCKS order.
     return (
         _index_of(bond.GetBondType(), BOND_TYPES),
         int(bond.GetIsConjugated()),
@@ -197,7 +187,7 @@ def _bond_code(bond: Chem.Bond) -> tuple[int, ...]:
 
 
 def _index_of(value, known: tuple) -> int:
-    """Position in `known`, or the trailing "other" bucket."""
+    # The trailing bucket is "other", which is why this cannot raise.
     return known.index(value) if value in known else len(known)
 
 

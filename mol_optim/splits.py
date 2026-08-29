@@ -15,7 +15,7 @@ from mol_optim import bindingdb
 def by_scaffold(
     compounds: Sequence[bindingdb.Compound],
 ) -> dict[str, list[bindingdb.Compound]]:
-    """Compounds grouped by scaffold key, largest group first."""
+    """Grouped by scaffold key, largest group first."""
     groups: dict[str, list[bindingdb.Compound]] = defaultdict(list)
     for compound in compounds:
         groups[compound.scaffold].append(compound)

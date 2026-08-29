@@ -44,8 +44,6 @@ class MaskedAtomPredictor(nn.Module):
 
 @dataclasses.dataclass(frozen=True)
 class Measurement:
-    """One evaluation pass over masked atoms."""
-
     loss: float  # mean cross-entropy, nats
     accuracy: float  # fraction whose element is the argmax
 

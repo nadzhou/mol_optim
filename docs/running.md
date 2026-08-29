@@ -3,7 +3,7 @@
 There is one command:
 
 ```bash
-mol-optim docs/config.toml
+mol-optim configs/config.toml
 ```
 
 It reads the config file, runs the steps that file's `steps` list names, in that order,
@@ -15,7 +15,7 @@ config file are relative to the directory you run the command from, which is the
 repository root. Runs write into `runs/`, which is not tracked; the plots worth keeping
 are written straight into [`results/`](../results/README.md).
 
-[`config.toml`](config.toml) is the default pipeline. Copy it and edit the copy to run
+[`configs/config.toml`](../configs/config.toml) is the default pipeline. Copy it and edit the copy to run
 something else — the whole point is that a different experiment is a different file, not
 a different command line.
 

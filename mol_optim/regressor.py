@@ -18,8 +18,6 @@ from mol_optim import config, encoder, featurize
 
 
 class Regressor(nn.Module):
-    """A batch of molecular graphs to one predicted pIC50 each."""
-
     def __init__(self, cfg: config.Config):
         super().__init__()
         self.encoder = encoder.GraphEncoder(cfg.hidden_dim, cfg.num_message_passing_layers)
@@ -36,8 +34,6 @@ class Regressor(nn.Module):
 
 @dataclass(frozen=True)
 class Prediction:
-    """What an ensemble says about a batch of molecules."""
-
     mean: np.ndarray  # [num_molecules] predicted pIC50
     spread: np.ndarray  # [num_molecules] standard deviation across the ensemble
 

@@ -44,11 +44,9 @@ class MolPPO(nn.Module):
         return torch.cat([embedded, batch.graph_features], dim=-1)
 
     def logits(self, batch: featurize.Batch) -> torch.Tensor:
-        """One unnormalized score per candidate — [num_graphs]."""
         return self.policy(self._trunk(batch)).squeeze(-1)
 
     def values(self, batch: featurize.Batch) -> torch.Tensor:
-        """One value per state — [num_graphs]."""
         return self.value(self._trunk(batch)).squeeze(-1)
 
 

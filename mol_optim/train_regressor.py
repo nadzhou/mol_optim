@@ -1,10 +1,5 @@
 """Training the pIC50 regressor on BindingDB EGFR — the whole thing, flat and in order.
 
-    python -m mol_optim.train_regressor --checkpoint models/egfr_regressor.pt
-
-Reports test MAE, RMSE and Spearman on a scaffold split, against the null of
-predicting the training mean.
-
 Three splits, not two: the training half is scaffold-split again for validation, which
 picks the epoch to stop at. Picking it by watching the test set is the oldest way to
 report a number that does not survive new data.

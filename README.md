@@ -20,26 +20,23 @@ Three pieces, each measured before the next one is built:
 - **A DQN over molecular edits.** Add an atom, add a bond, remove a bond, or stop, with
   the candidate set enumerated fresh at every state.
 
-The reward arrives as a plain function, so swapping the fitted regressor for RDKit's QED
-is a flag rather than a subclass. That flag is what makes the result below legible.
+The reward arrives as a plain function named in a config file, so fitting a new one and
+pointing the agent at it is an edit to that file, not a subclass.
 
 ## The result
 
 | Reward | Agent | Random |
 |---|---:|---:|
-| QED, the control | 0.895 | 0.145 |
-| EGFR pIC50, the real target | 0.859 | 0.331 |
+| EGFR pIC50 | 0.859 | 0.331 |
 
-Each row is on its own reward's scale. Supporting numbers: the GNN encoder matches a
-fingerprint baseline on QED using 56k parameters against 2.7M, and pretraining on ZINC
-improves the regressor's test MAE from 0.868 to 0.806.
+Both on the same scale, predicted pIC50 divided by 10. Pretraining on ZINC improves the
+regressor's test MAE from 0.868 to 0.806, and the GNN encoder carries 56k parameters
+against the published fingerprint MLP's 2.7M.
 
 **The finding worth your time is that the agent games whatever it is scored on.** Against
-QED it built fused strained heterocycles, enol ethers and N-hydroxyls — molecules that
-score 0.93 and cannot exist. Anyone can see those are wrong, which is the point of keeping
-QED around. Against the fitted pIC50 regressor it found a molecule scoring 9.95 that looks
-entirely plausible, and only a substructure audit shows every one of its top molecules
-carries a nitrogen–nitrogen bond.
+the fitted pIC50 regressor it found a molecule scoring 9.95 that looks entirely plausible,
+and only a substructure audit shows every one of its top molecules carries a
+nitrogen–nitrogen bond.
 
 A reward curve that climbs is not evidence of lead optimization. It is evidence that the
 loop optimizes its reward. Telling those apart is what this repo is for, and
@@ -51,28 +48,31 @@ loop optimizes its reward. Telling those apart is what this repo is for, and
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -m "not slow"   # 106 tests, about 12 seconds
+pytest -m "not slow"   # 104 tests, about 14 seconds
 ```
 
-Then the whole pipeline, from download to figures:
+Then the whole pipeline, from download to figures — one command, one config file:
 
 ```bash
-./run_all.sh
+mol-optim configs/config.toml
 ```
 
-About 25 minutes of compute, plus a 605 MB download the first time. Each fetch is
-pinned by checksum, so a silently changed upstream file fails loudly instead of quietly
-moving your numbers. Runs write into `runs/`, which is not tracked; the figures and
-[results/report.md](results/report.md) are written into `results/` by the last two steps,
-so regenerating them is the same command as running the pipeline.
-[docs/running.md](docs/running.md) breaks the script into its steps with timings, and
-explains the flags worth changing.
+About 25 minutes of compute, plus a 605 MB download the first time. Each fetch is pinned
+by checksum, so a silently changed upstream file fails loudly instead of quietly moving
+your numbers. Runs write into `runs/`, which is not tracked; the figures are written
+straight into `results/`, so regenerating them is the same command as running the
+pipeline.
+
+Every knob is in that file: which steps run, which datasets, which agents in which order,
+and every hyperparameter. A different experiment is a different config file, not a
+different command line. [docs/running.md](docs/running.md) says what each step does, with
+timings, and what is worth changing.
 
 ## Where things are
 
 - [mol_optim/](mol_optim/README.md) — what each module is, and where to start reading
-- [docs/running.md](docs/running.md) — every command, with timings
-- [results/report.md](results/report.md) — the top-k tables and their audit, generated
+- [configs/config.toml](configs/config.toml) — the pipeline, as data
+- [docs/running.md](docs/running.md) — what each step does, and what to change
 - [results/](results/README.md) — the figures and the numbers
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how commits work here, and the size budget
 
@@ -86,4 +86,6 @@ explains the flags worth changing.
 [google-research/mol_dqn](https://github.com/google-research/google-research/tree/master/mol_dqn)
 is the original TF1 code and the source of the published hyperparameters. Neither is
 imported here. Reimplementing rather than importing measured what the former's
-defaults cost: 0.19 of QED.
+defaults cost — the published gamma, ring sizes,
+buffer size, update interval and gradient clipping are what this repo uses, not the
+port's.

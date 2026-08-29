@@ -1,12 +1,9 @@
 """PPO on the molecule MDP — rollout, advantage, clipped update, flat and in order.
 
-The point of comparison. DQN and PPO run the same environment, the same reward and the
-same encoder, so a difference between what they build is a property of the algorithm
-and a similarity is a property of the reward surface. That is the question this file
-exists to answer; a higher reward curve on its own is not evidence of anything, which
-is what `results/README.md` is about.
-
-    python -m mol_optim.train_ppo --updates 60 --reward pic50 --seed-molecule 0
+The point of comparison. DQN and PPO run the same environment, reward and encoder, so a
+difference between what they build is a property of the algorithm and a similarity is a
+property of the reward surface. A higher reward curve on its own is not evidence of
+anything.
 """
 
 import time

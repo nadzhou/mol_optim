@@ -34,8 +34,6 @@ MOTIFS: dict[str, Chem.Mol] = {
 
 @dataclass(frozen=True)
 class Audit:
-    """One molecule, read for the things past runs have gone wrong in."""
-
     motif_counts: dict[str, int]  # matches per motif, zeros included
     num_heavy_atoms: int
     num_nitrogens: int
@@ -47,7 +45,6 @@ class Audit:
 
 
 def audit(mol: Chem.Mol, scaffold: Chem.Mol | None = None) -> Audit:
-    """Every count for one molecule."""
     return Audit(
         motif_counts={
             name: len(mol.GetSubstructMatches(pattern))
@@ -70,7 +67,7 @@ def audit(mol: Chem.Mol, scaffold: Chem.Mol | None = None) -> Audit:
 
 
 def scaffold_of(mol: Chem.Mol) -> Chem.Mol:
-    """The Bemis-Murcko frame, which is what "the scaffold survived" is checked against."""
+    """The Bemis-Murcko frame — what "the scaffold survived" is checked against."""
     return MurckoScaffold.GetScaffoldForMol(mol)
 
 

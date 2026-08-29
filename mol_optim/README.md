@@ -1,17 +1,26 @@
 # Module map
 
-Start with `environment.py` and `train_dqn.py` — between them they hold the whole loop.
-Everything is plain functions over `Chem.Mol` and tensors. There are no wrapper classes,
-no config globals, and no training framework: hyperparameters travel as frozen
-dataclasses passed explicitly, and the reward arrives as a function, so reading a call
-site tells you what runs.
+Start with `cli.py` for the shape of a run, then `environment.py` and `train_dqn.py` —
+between them those two hold the whole loop. Everything is plain functions over `Chem.Mol`
+and tensors. There are no wrapper classes, no config globals, and no training framework:
+hyperparameters travel as frozen dataclasses passed explicitly, and the reward arrives as
+a function, so reading a call site tells you what runs.
+
+`cli.py` is the only entry point. Every other module is a library — none is a script, and
+none has a `__main__` block.
+
+## The entry point
+
+| File | What it is |
+|---|---|
+| `cli.py` | `mol-optim <config.toml>`: the step, agent and plot tables, and the loop over them |
+| `config.py` | every knob as a frozen dataclass, and the TOML file that fills them |
 
 ## The loop
 
 | File | What it is |
 |---|---|
 | `determinism.py` | seeds every source of randomness the loop touches |
-| `config.py` | every hyperparameter, one frozen dataclass, passed explicitly |
 | `environment.py` | the MDP: candidate enumeration by RWMol edits and fragment attachment, `step` |
 | `graph_key.py` | the state key: a canonical name taken off the graph, no SMILES |
 | `featurize.py` | molecular graph to network tensors: int8 codes, one-hot at the network |
@@ -28,8 +37,8 @@ site tells you what runs.
 
 | File | What it is |
 |---|---|
-| `rewards.py` | QED: RDKit's drug-likeness score, kept as the control |
-| `reward_pic50.py` | the real reward: the pIC50 regressor, behind three guardrails |
+| `rewards.py` | the table an agent's `reward = "..."` resolves through |
+| `reward_pic50.py` | the reward itself: the pIC50 regressor, behind three guardrails |
 
 ## Data and the pIC50 model
 
@@ -46,7 +55,7 @@ site tells you what runs.
 
 | File | What it is |
 |---|---|
-| `zinc.py` | ZINC 250k in, molecular graphs out |
+| `zinc.py` | the unlabelled set in, molecular graphs out |
 | `fetch_bindingdb.py` | BindingDB's 9 GB table in, one target's compounds out |
 
 ## Looking at the output

@@ -1,6 +1,6 @@
 """Tier 0 of the algorithm ladder: uniform random over the candidate set.
 
-This is the number the DQN has to beat. A reward curve that looks like progress but
+The number every other agent has to beat. A reward curve that looks like progress but
 ties this is a broken agent, and nothing else in the test suite catches that.
 """
 

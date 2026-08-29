@@ -20,7 +20,7 @@ from mol_optim import bindingdb, config
 
 BINDINGDB_PATH = config.BindingDBSpec().path
 ZINC_PATH = config.ZincSpec().path
-BUILD_IT = "mol-optim docs/config.toml"
+BUILD_IT = "mol-optim configs/config.toml"
 
 
 def require(path: Path, command: str) -> None:

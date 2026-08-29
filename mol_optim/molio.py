@@ -11,7 +11,6 @@ from rdkit.Chem import AllChem
 
 
 def read(path: Path) -> tuple[Chem.Mol, ...]:
-    """Every molecule in an SDF, in file order, with its properties attached."""
     molecules = []
     for mol in Chem.SDMolSupplier(str(path)):
         if mol is None:
@@ -21,12 +20,11 @@ def read(path: Path) -> tuple[Chem.Mol, ...]:
 
 
 def read_named(path: Path) -> dict[str, Chem.Mol]:
-    """Every molecule in an SDF, keyed by its record name."""
     return {mol.GetProp("_Name"): mol for mol in read(path)}
 
 
 def write(path: Path, molecules: tuple[Chem.Mol, ...], properties: dict[str, list]) -> None:
-    """Writes molecules to an SDF, with one column of `properties` per molecule."""
+    """One column of `properties` per molecule, alongside the structures."""
     writer = Chem.SDWriter(str(path))
     for index, mol in enumerate(molecules):
         record = Chem.Mol(mol)
