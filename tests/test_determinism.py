@@ -1,13 +1,9 @@
 """Seeding. Every measurement in this repo is untrustworthy without it."""
 
-from mol_optim import (
-    baseline_random,
-    config,
-    environment,
-    graph_key,
-    rewards,
-    train_dqn,
-)
+from mol_optim import config
+from mol_optim.chem import graph_key
+from mol_optim.env import environment
+from mol_optim.agents import dqn, random_walk
 from tests import molecules
 from tests.molecules import NAMED
 
@@ -26,13 +22,13 @@ def hashes(run) -> tuple[str, ...]:
 
 
 def test_dqn_run_is_bitwise_reproducible():
-    first, second = train_dqn.train(SMALL, molecules.size_reward), train_dqn.train(SMALL, molecules.size_reward)
+    first, second = dqn.train(SMALL, molecules.size_reward), dqn.train(SMALL, molecules.size_reward)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
 
 def test_random_rollout_is_bitwise_reproducible():
-    first, second = baseline_random.rollout(SMALL, molecules.size_reward), baseline_random.rollout(SMALL, molecules.size_reward)
+    first, second = random_walk.rollout(SMALL, molecules.size_reward), random_walk.rollout(SMALL, molecules.size_reward)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
@@ -43,8 +39,8 @@ def test_different_seeds_give_different_runs():
     seeded = config.Config(
         init_mol=NAMED["ethanol"], episodes=3, max_steps_per_episode=4, seed=1
     )
-    assert hashes(baseline_random.rollout(SMALL, molecules.size_reward)) != hashes(
-        baseline_random.rollout(seeded, molecules.size_reward)
+    assert hashes(random_walk.rollout(SMALL, molecules.size_reward)) != hashes(
+        random_walk.rollout(seeded, molecules.size_reward)
     )
 
 

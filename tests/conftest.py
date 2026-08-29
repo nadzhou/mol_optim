@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from mol_optim import bindingdb, config
+from mol_optim import config
+from mol_optim.datasets import bindingdb
 
 BINDINGDB_PATH = config.BindingDBSpec().path
 ZINC_PATH = config.ZincSpec().path

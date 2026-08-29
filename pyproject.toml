@@ -3,9 +3,10 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 # Without this, setuptools tries to auto-discover packages and trips over the sibling
-# data/, models/, runs/ and results/ directories.
-[tool.setuptools]
-packages = ["mol_optim"]
+# data/, models/, runs/ and results/ directories. The glob is what puts the subpackages
+# in the wheel; naming only "mol_optim" installs the top level and silently drops them.
+[tool.setuptools.packages.find]
+include = ["mol_optim*"]
 
 [project]
 name = "mol-optim"

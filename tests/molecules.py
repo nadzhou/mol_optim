@@ -7,7 +7,7 @@ molecule as a SMILES string.
 
 from pathlib import Path
 
-from mol_optim import molio
+from mol_optim.chem import molio
 
 NAMED = molio.read_named(Path(__file__).parent / "fixtures" / "molecules.sdf")
 

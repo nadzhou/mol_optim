@@ -146,7 +146,6 @@ class RegressorSpec:
 class AgentSpec:
     kind: str = "dqn"  # a key of cli.AGENTS
     name: str = "run"  # names the CSV, the checkpoint and the top-k under Settings.runs
-    reward: str = "pic50"  # a key of rewards.REWARDS
     seed_molecule: int | None = None  # index into seeds.choose()
     regressor: Path = Path("models/egfr_regressor.pt")
     pretrained_encoder: Path | None = None

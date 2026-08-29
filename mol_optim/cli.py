@@ -13,27 +13,17 @@ file alone.
 import sys
 from pathlib import Path
 
-from mol_optim import (
-    audit,
-    baseline_random,
-    config,
-    fetch_bindingdb,
-    graph_key,
-    plot_pretrain,
-    plot_regressor,
-    plot_run,
-    pretrain,
-    results,
-    train_dqn,
-    train_ppo,
-    train_regressor,
-    zinc,
-)
+from mol_optim import config
+from mol_optim.chem import graph_key
+from mol_optim.datasets import bindingdb, zinc
+from mol_optim.nets import pretrain, regressor
+from mol_optim.agents import dqn, ppo, random_walk
+from mol_optim.report import audit, plot_pretrain, plot_regressor, plot_run, results
 
 AGENTS = {
-    "dqn": train_dqn.run,
-    "ppo": train_ppo.run,
-    "random": baseline_random.run,
+    "dqn": dqn.run,
+    "ppo": ppo.run,
+    "random": random_walk.run,
 }
 
 PLOTS = {
@@ -51,7 +41,7 @@ def _agents(settings: config.Settings) -> None:
                 f"agent {spec.name!r} has kind {spec.kind!r}; "
                 f"there is {', '.join(sorted(AGENTS))}"
             )
-        print(f"-- {spec.name} ({spec.kind}, reward {spec.reward})", flush=True)
+        print(f"-- {spec.name} ({spec.kind})", flush=True)
         run = AGENTS[spec.kind](settings, spec)
         best_molecule, best_reward = run.best
         print(
@@ -76,9 +66,9 @@ def _plots(settings: config.Settings) -> None:
 
 STEPS = {
     "zinc": zinc.run,
-    "bindingdb": fetch_bindingdb.run,
+    "bindingdb": bindingdb.run,
     "pretrain": pretrain.run,
-    "regressor": train_regressor.run,
+    "regressor": regressor.run,
     "agents": _agents,
     "audit": audit.run,
     "plots": _plots,
