@@ -1,17 +1,12 @@
-"""Reward and discount arithmetic. An off-by-one here reweights all training."""
+"""Discount arithmetic. An off-by-one here reweights all training."""
 
 import pytest
-from rdkit.Chem import QED
 
-from mol_optim import config, environment, rewards
+from mol_optim import config, environment
+from tests import molecules
 from tests.molecules import NAMED
 
 ASPIRIN = NAMED["aspirin"]
-
-
-def test_qed_matches_rdkit_and_is_zero_for_no_molecule():
-    assert rewards.qed(ASPIRIN) == QED.qed(ASPIRIN)
-    assert rewards.qed(None) == 0.0
 
 
 def test_discount_applied_from_steps_remaining():
@@ -20,8 +15,8 @@ def test_discount_applied_from_steps_remaining():
     cfg = config.Config(init_mol=ASPIRIN, max_steps_per_episode=5, discount_factor=0.9)
     episode = environment.reset(cfg)
     for _ in range(3):
-        result = environment.step(episode, 0, rewards.qed, cfg)
-    assert result.reward == pytest.approx(rewards.qed(result.state) * 0.9**2)
+        result = environment.step(episode, 0, molecules.size_reward, cfg)
+    assert result.reward == pytest.approx(molecules.size_reward(result.state) * 0.9**2)
     assert not result.terminated
 
 
@@ -29,16 +24,16 @@ def test_terminal_reward_is_undiscounted():
     cfg = config.Config(init_mol=ASPIRIN, max_steps_per_episode=2, discount_factor=0.9)
     episode = environment.reset(cfg)
     for _ in range(2):
-        result = environment.step(episode, 0, rewards.qed, cfg)
+        result = environment.step(episode, 0, molecules.size_reward, cfg)
     assert result.terminated
-    assert result.reward == pytest.approx(rewards.qed(result.state))
+    assert result.reward == pytest.approx(molecules.size_reward(result.state))
 
 
 def test_episode_terminates_at_exactly_max_steps():
     cfg = config.Config(init_mol=ASPIRIN, max_steps_per_episode=4)
     episode = environment.reset(cfg)
     for step_index in range(4):
-        result = environment.step(episode, 0, rewards.qed, cfg)
+        result = environment.step(episode, 0, molecules.size_reward, cfg)
         assert result.terminated == (step_index == 3)
     assert episode.num_steps_taken == 4
 

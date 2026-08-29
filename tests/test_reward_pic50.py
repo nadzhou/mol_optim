@@ -14,8 +14,8 @@ CHECKPOINT = Path("models/egfr_regressor.pt")
 @pytest.fixture(scope="module")
 def reward() -> reward_pic50.Reward:
     # The reward carries the training set with it, for the nearest-neighbour distance.
-    conftest.require(bindingdb.DATASET_PATH, "python -m mol_optim.fetch_bindingdb")
-    return reward_pic50.load(CHECKPOINT)
+    conftest.require(conftest.BINDINGDB_PATH, conftest.BUILD_IT)
+    return reward_pic50.load(CHECKPOINT, conftest.BINDINGDB_PATH)
 
 
 def test_molecules_far_from_training_are_zeroed(reward):
@@ -46,8 +46,8 @@ def test_ranks_known_inhibitors_above_random_zinc(reward, compounds):
         compounds, 0.2, seeds.held_out_scaffolds(seeds.choose(compounds))
     )
     actives = [c.mol for c in test if c.pic50 >= 8.0]
-    conftest.require(zinc.DATA_PATH, "python -m mol_optim.zinc")
-    decoys = list(zinc.molecules(limit=500))
+    conftest.require(conftest.ZINC_PATH, conftest.BUILD_IT)
+    decoys = list(zinc.molecules(conftest.ZINC_PATH, limit=500))
 
     active_scores = reward_pic50.score_many(reward, actives)
     decoy_scores = reward_pic50.score_many(reward, decoys)

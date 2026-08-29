@@ -12,6 +12,8 @@ import torch
 
 from mol_optim import config, environment, ppo, rewards, train_ppo
 
+from tests import molecules
+
 SET_SIZES = [1, 3, 7, 2]  # a one-candidate step is real: a single atom has few edits
 
 
@@ -75,7 +77,7 @@ def tiny(seed: int = 0) -> tuple[config.Config, config.PPOConfig]:
 
 def test_a_short_run_produces_one_molecule_per_episode():
     cfg, ppo_cfg = tiny()
-    run = train_ppo.train(cfg, ppo_cfg, rewards.qed, num_updates=2)
+    run = train_ppo.train(cfg, ppo_cfg, molecules.size_reward, num_updates=2)
 
     assert len(run.episode_rewards) == 2 * ppo_cfg.rollout_episodes
     assert len(run.episode_molecules) == len(run.episode_rewards)
@@ -85,6 +87,6 @@ def test_a_short_run_produces_one_molecule_per_episode():
 def test_the_same_seed_gives_the_same_run():
     # PPO samples its actions, so the seeding has to cover torch's generator as well as
     # numpy's. Without that this is the test that fails.
-    first = train_ppo.train(*tiny(), rewards.qed, num_updates=2)
-    second = train_ppo.train(*tiny(), rewards.qed, num_updates=2)
+    first = train_ppo.train(*tiny(), molecules.size_reward, num_updates=2)
+    second = train_ppo.train(*tiny(), molecules.size_reward, num_updates=2)
     assert first.episode_rewards == second.episode_rewards

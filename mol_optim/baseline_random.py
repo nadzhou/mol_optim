@@ -5,6 +5,7 @@ ties this is a broken agent, and nothing else in the test suite catches that.
 """
 
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -12,13 +13,10 @@ import numpy as np
 from rdkit import Chem
 
 from mol_optim import (
-    bindingdb,
     config,
     determinism,
     environment,
-    graph_key,
     results,
-    reward_pic50,
     rewards,
     seeds,
 )
@@ -49,58 +47,7 @@ def rollout(cfg: config.Config, reward_fn: Callable[[Chem.Mol], float]) -> resul
     )
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=200)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--reward",
-        choices=("qed", "pic50"),
-        default="qed",
-        help="qed is RDKit's drug-likeness score; pic50 is the fitted EGFR regressor",
-    )
-    parser.add_argument(
-        "--seed-molecule",
-        type=int,
-        default=None,
-        help="index into seeds.choose(); the molecule episodes start from",
-    )
-    parser.add_argument(
-        "--max-steps",
-        type=int,
-        default=config.Config.max_steps_per_episode,
-        help="edits per episode; 6 for pic50, where 40 leaves the applicability domain",
-    )
-    parser.add_argument(
-        "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
-    )
-    args = parser.parse_args()
-
-    init_mol = None
-    if args.reward == "qed":
-        reward_fn = rewards.qed
-    else:
-        # Divided by 10 to match train_dqn, so the two numbers compare directly.
-        reward = reward_pic50.load(args.regressor)
-        reward_fn = lambda mol: reward_pic50.score(reward, mol) / 10.0  # noqa: E731
-    if args.seed_molecule is not None:
-        init_mol = seeds.choose(bindingdb.load())[args.seed_molecule].mol
-
-    run = rollout(
-        config.Config(
-            episodes=args.episodes,
-            seed=args.seed,
-            init_mol=init_mol,
-            max_steps_per_episode=args.max_steps,
-        ),
-        reward_fn,
-    )
-    best_molecule, best_reward = run.best
-    print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
-    print(
-        f"best: {best_reward:.4f}  "
-        f"{best_molecule.GetNumHeavyAtoms()} heavy atoms  "
-        f"{graph_key.canonical_hash(best_molecule)}"
-    )
+def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
+    reward_fn = rewards.build(spec, settings.bindingdb.path)
+    init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
+    return rollout(replace(spec.cfg, init_mol=init_mol), reward_fn)

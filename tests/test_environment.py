@@ -11,6 +11,7 @@ from hypothesis import strategies as st
 from rdkit import Chem
 
 from mol_optim import config, environment, graph_key, rewards
+from tests import molecules
 from tests.molecules import NAMED, START_MOLECULES
 
 
@@ -46,7 +47,7 @@ def test_random_action_sequences_keep_every_invariant(start_index, moves):
     for move in moves:
         assert_action_set_is_sane(episode.valid_actions)
         result = environment.step(
-            episode, move % len(episode.valid_actions), rewards.qed, cfg
+            episode, move % len(episode.valid_actions), molecules.size_reward, cfg
         )
     assert_action_set_is_sane(episode.valid_actions)
     assert episode.num_steps_taken == len(moves)
@@ -94,9 +95,9 @@ def test_allowed_ring_sizes_is_threaded_through():
 def test_step_rejects_a_step_past_termination():
     cfg = config.Config(init_mol=NAMED["ethanol"], max_steps_per_episode=1)
     episode = environment.reset(cfg)
-    assert environment.step(episode, 0, rewards.qed, cfg).terminated
+    assert environment.step(episode, 0, molecules.size_reward, cfg).terminated
     with pytest.raises(ValueError, match="terminated"):
-        environment.step(episode, 0, rewards.qed, cfg)
+        environment.step(episode, 0, molecules.size_reward, cfg)
 
 
 def test_empty_start_offers_one_atom_of_each_type():

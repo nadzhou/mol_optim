@@ -1,12 +1,10 @@
 """The pIC50 regressor as the RL reward, with guardrails.
 
-An agent optimizing a surrogate finds its mistakes — the descriptor-scored runs built
-hemiaminals against a
-published model. Three guardrails fire in order: zero the reward below `domain_floor`
-Tanimoto to the training set, subtract `pessimism` x ensemble spread, clip at the most
-potent training compound. The regressor's own evaluation measured the domain as the
-one with evidence (error
-1.15 at Tanimoto 0.41 against 0.65 at 0.94) and disagreement as nearly flat (0.08).
+An agent optimizing a surrogate finds its mistakes. Three guardrails fire in order: zero
+the reward below `domain_floor` Tanimoto to the training set, subtract `pessimism` times
+the ensemble spread, clip at the most potent training compound. The regressor's own
+evaluation measured the domain as the thing with evidence behind it (MAE 1.15 at Tanimoto
+0.41 against 0.65 at 0.94) and disagreement as nearly flat (0.08).
 """
 
 from dataclasses import dataclass
@@ -25,8 +23,6 @@ MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
 @dataclass(frozen=True)
 class Reward:
-    """The ensemble and what it was fitted on, loaded once."""
-
     models: tuple[regressor.Regressor, ...]
     cfg: config.Config
     train_fingerprints: tuple  # Morgan fingerprints of the training compounds
@@ -37,18 +33,15 @@ class Reward:
 
 def load(
     checkpoint_path: Path,
+    dataset_path: Path,
     domain_floor: float = 0.3,
     pessimism: float = 0.5,
 ) -> Reward:
-    """The ensemble, plus the training set it is allowed to have opinions near.
-
-    domain_floor 0.3 sits below the least-similar test decile (0.41), so it zeroes
-    only molecules further out than anything the reported MAE describes.
-    """
+    # domain_floor 0.3 sits below the least-similar test decile (0.41), so it zeroes only
+    # molecules further out than anything the reported MAE describes.
     if not checkpoint_path.exists():
         raise FileNotFoundError(
-            f"{checkpoint_path} is missing. Build it with: "
-            "python -m mol_optim.train_regressor --checkpoint " + str(checkpoint_path)
+            f"{checkpoint_path} is missing. Run the 'regressor' step first."
         )
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     cfg = checkpoint["config"]
@@ -60,7 +53,7 @@ def load(
         models.append(model)
 
     by_key = {
-        compound.mol.GetProp("_Name"): compound for compound in bindingdb.load()
+        compound.mol.GetProp("_Name"): compound for compound in bindingdb.load(dataset_path)
     }
     train_compounds = [by_key[key] for key in checkpoint["train_keys"]]
     return Reward(

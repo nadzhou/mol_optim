@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from mol_optim import config, dqn, environment, featurize, pretrain, rewards, train_dqn
+from tests import molecules
 from tests.molecules import NAMED
 
 SMALL = config.Config(
@@ -52,7 +53,7 @@ def test_a_pretrained_encoder_reaches_the_training_loop(tmp_path):
     initialization = tmp_path / "initialization.pt"
     train_dqn.train(
         config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
-        rewards.qed,
+        molecules.size_reward,
         checkpoint_path=initialization,
         pretrained_encoder=encoder_path,
     )
@@ -72,17 +73,17 @@ def test_target_network_lags_and_tracks_the_online_network(tmp_path):
     # this checkpoint is the initialization.
     train_dqn.train(
         config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
-        rewards.qed,
+        molecules.size_reward,
         checkpoint_path=never_updates,
     )
     train_dqn.train(
         config.Config(**{**SMALL.__dict__, "polyak": 1.0}),
-        rewards.qed,
+        molecules.size_reward,
         checkpoint_path=frozen_target,
     )
     train_dqn.train(
         config.Config(**{**SMALL.__dict__, "polyak": 0.0}),
-        rewards.qed,
+        molecules.size_reward,
         checkpoint_path=copied_target,
     )
 

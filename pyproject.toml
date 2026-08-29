@@ -15,6 +15,9 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = ["rdkit", "torch", "numpy", "matplotlib"]
 
+[project.scripts]
+mol-optim = "mol_optim.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "hypothesis"]
 

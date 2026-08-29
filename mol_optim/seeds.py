@@ -8,9 +8,10 @@ Used twice — as the RL episodes' starting molecules, and as the scaffolds held
 the regressor's training set. Both, or the regressor knows the answer where it starts.
 """
 
+from pathlib import Path
 from typing import Sequence
 
-from rdkit import DataStructs
+from rdkit import Chem, DataStructs
 from rdkit.Chem import rdFingerprintGenerator
 
 from mol_optim import bindingdb, splits
@@ -29,7 +30,6 @@ def choose(
     """One representative from each of the largest active scaffold clusters.
 
     min_pic50 8.0 is 10 nM — a lead series, not a screening hit, and EGFR has hundreds.
-
     Two filters on top of "largest clusters first", both from reading what it picked
     without them: the representative's label must be measured more than once and agree
     within a log (the first pick spread 2.73 logs across five), and a cluster is skipped
@@ -42,9 +42,7 @@ def choose(
 
     for group in splits.by_scaffold(actives).values():  # largest cluster first
         # Ties broken by name so the choice does not move between runs.
-        by_potency = sorted(
-            group, key=lambda c: (-c.pic50, c.mol.GetProp("_Name"))
-        )
+        by_potency = sorted(group, key=lambda c: (-c.pic50, c.mol.GetProp("_Name")))
         settled = [
             c for c in by_potency if c.num_measurements > 1 and c.pic50_spread <= 1.0
         ]
@@ -66,3 +64,10 @@ def choose(
 def held_out_scaffolds(seeds: Sequence[bindingdb.Compound]) -> frozenset[str]:
     """The scaffolds that must not appear in the regressor's training set."""
     return frozenset(seed.scaffold for seed in seeds)
+
+
+def molecule(dataset_path: Path, index: int | None) -> Chem.Mol | None:
+    """The `index`-th chosen seed's graph, or None. What `seed_molecule` in the config is."""
+    if index is None:
+        return None
+    return choose(bindingdb.load(dataset_path))[index].mol

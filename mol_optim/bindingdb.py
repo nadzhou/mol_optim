@@ -1,8 +1,8 @@
-"""BindingDB IC50 values as pIC50 on graphs.
+"""BindingDB IC50 values as pIC50 on graphs. `fetch_bindingdb.py` writes what this reads.
 
-`fetch_bindingdb.py` writes the dataset this reads. The unit conversion lives here
-rather than inline because nM against uM shifts every label by a constant, and that
-trains a regressor which looks fine on its own test set and ranks nothing correctly.
+The unit conversion lives here rather than inline because nM against uM shifts every
+label by a constant, and that trains a regressor which looks fine on its own test set
+and ranks nothing correctly.
 """
 
 import math
@@ -13,13 +13,9 @@ from rdkit import Chem
 
 from mol_optim import graph_key, molio
 
-DATASET_PATH = Path(__file__).resolve().parent.parent / "data" / "egfr_ic50.sdf"
-
 
 @dataclass(frozen=True)
 class Compound:
-    """One compound with one label, after aggregation."""
-
     mol: Chem.Mol
     pic50: float
     num_measurements: int  # how many BindingDB rows the median was taken over
@@ -36,11 +32,8 @@ def to_pic50(ic50_nm: float) -> float:
 
 
 def median(values: list[float]) -> float:
-    """The middle value, or the mean of the middle two.
-
-    Median, not mean: duplicates are the same compound in different labs, and the
-    disagreements reach 8 logs. One bad row should move the label by nothing.
-    """
+    # Median, not mean: duplicates are the same compound measured in different labs, and
+    # the disagreements reach 8 logs. One bad row should move the label by nothing.
     ordered = sorted(values)
     middle = len(ordered) // 2
     if len(ordered) % 2 == 1:
@@ -48,12 +41,9 @@ def median(values: list[float]) -> float:
     return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
-def load(path: Path = DATASET_PATH) -> tuple[Compound, ...]:
-    """The dataset, as compounds. Raises if it has not been built yet."""
+def load(path: Path) -> tuple[Compound, ...]:
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} is missing. Build it once with: python -m mol_optim.fetch_bindingdb"
-        )
+        raise FileNotFoundError(f"{path} is missing. Run the 'bindingdb' step first.")
     named = molio.read_named(path)
     return tuple(
         Compound(

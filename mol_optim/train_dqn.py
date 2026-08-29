@@ -6,6 +6,7 @@ it is one batched forward pass, inline, where the shapes are visible.
 """
 
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -14,7 +15,6 @@ import torch
 from rdkit import Chem
 
 from mol_optim import (
-    bindingdb,
     config,
     determinism,
     dqn,
@@ -24,7 +24,6 @@ from mol_optim import (
     pretrain,
     replay_buffer,
     results,
-    reward_pic50,
     rewards,
     seeds,
 )
@@ -224,83 +223,19 @@ def train(
     )
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=5000)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--log", type=Path, default=None)
-    parser.add_argument("--checkpoint", type=Path, default=None)
-    parser.add_argument("--report-every", type=int, default=25)
-    parser.add_argument(
-        "--reward",
-        choices=("qed", "pic50"),
-        default="qed",
-        help="qed is RDKit's drug-likeness score; pic50 is the fitted EGFR regressor",
-    )
-    parser.add_argument(
-        "--seed-molecule",
-        type=int,
-        default=None,
-        help="index into seeds.choose(); the molecule episodes start from",
-    )
-    parser.add_argument(
-        "--max-steps",
-        type=int,
-        default=config.Config.max_steps_per_episode,
-        help="edits per episode; 6 for pic50, where 40 leaves the applicability domain",
-    )
-    parser.add_argument(
-        "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
-    )
-    parser.add_argument(
-        "--top-k", type=Path, default=None, help="stem for a top-k drawing and SDF"
-    )
-    parser.add_argument(
-        "--pretrained-encoder",
-        type=Path,
-        default=None,
-        help="a ZINC AttrMask checkpoint from mol_optim.pretrain",
-    )
-    args = parser.parse_args()
-
-    init_mol = None
-    if args.reward == "qed":
-        reward_fn = rewards.qed
-    else:
-        reward = reward_pic50.load(args.regressor)
-        # Divided by 10 to land in [0, 1], where the published learning rate and the MSE
-        # loss were tuned. Zero stays zero, so the domain filter still reads as "nothing".
-        reward_fn = lambda mol: reward_pic50.score(reward, mol) / 10.0  # noqa: E731
-        if args.seed_molecule is not None:
-            init_mol = seeds.choose(bindingdb.load())[args.seed_molecule].mol
-            print(
-                f"starting from seed {args.seed_molecule}: "
-                f"{init_mol.GetNumHeavyAtoms()} heavy atoms, "
-                f"reward {reward_fn(init_mol):.4f}"
-            )
-
-    run = train(
-        config.Config(
-            episodes=args.episodes,
-            seed=args.seed,
-            init_mol=init_mol,
-            max_steps_per_episode=args.max_steps,
-        ),
+def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
+    reward_fn = rewards.build(spec, settings.bindingdb.path)
+    init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
+    if init_mol is not None:
+        print(
+            f"starting from seed {spec.seed_molecule}: "
+            f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
+        )
+    return train(
+        replace(spec.cfg, init_mol=init_mol),
         reward_fn,
-        log_path=args.log,
-        checkpoint_path=args.checkpoint,
-        report_every=args.report_every,
-        pretrained_encoder=args.pretrained_encoder,
+        log_path=settings.runs / f"{spec.name}.csv",
+        checkpoint_path=settings.runs / f"{spec.name}.pt",
+        report_every=spec.report_every,
+        pretrained_encoder=spec.pretrained_encoder,
     )
-    best_molecule, best_reward = run.best
-    print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
-    print(
-        f"best: {best_reward:.4f}  "
-        f"{best_molecule.GetNumHeavyAtoms()} heavy atoms  "
-        f"{graph_key.canonical_hash(best_molecule)}"
-    )
-    if args.top_k is not None:
-        results.top_k(run, args.top_k)
-        print(f"wrote {args.top_k}.png and {args.top_k}.sdf")

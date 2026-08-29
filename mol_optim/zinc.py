@@ -1,13 +1,8 @@
-"""ZINC, the unlabelled molecules the encoder is pretrained on. Run once:
+"""ZINC, the unlabelled molecules the encoder is pretrained on.
 
-    python -m mol_optim.zinc
-
-Downloads TDC's `zinc.tab` — 249,455 drug-like molecules, the 250k set the MolDQN and
-JT-VAE papers use — checks the pinned hash, and reads every record once.
-
-Molecules arrive as text here because ZINC is published that way; nothing downstream of
-`molecules()` handles a SMILES string. The 12 MB file stays out of version control, and
-the URL and hash below say exactly which molecules the checkpoint was pretrained on.
+Molecules arrive as text because ZINC is published that way; nothing downstream of
+`molecules()` handles a SMILES string. The URL and hash live in the config file, so
+swapping in another unlabelled set is a config change, not a code change.
 """
 
 import hashlib
@@ -16,22 +11,21 @@ from pathlib import Path
 
 from rdkit import Chem
 
-# tdc.metadata.name2id["zinc"] — the file tdc.generation.MolGen(name="ZINC") downloads.
-DATA_URL = "https://dataverse.harvard.edu/api/access/datafile/4170963"
-DATA_SHA256 = "b65ee88f1838586571fc41200ee60fb7b97da55da72823bed72dc315af2fb48b"
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "zinc.tab"
+from mol_optim import config
+
+# The default in config.ZincSpec is tdc.metadata.name2id["zinc"] — the file
+# tdc.generation.MolGen(name="ZINC") downloads: 249,455 drug-like molecules, the 250k set
+# the MolDQN and JT-VAE papers use.
 
 
-def molecules(path: Path = DATA_PATH, limit: int | None = None) -> tuple[Chem.Mol, ...]:
-    """The first `limit` ZINC molecules, in file order. About 10 s for all of them.
+def molecules(path: Path, limit: int | None = None) -> tuple[Chem.Mol, ...]:
+    """The first `limit` molecules, in file order. About 10 s for all of ZINC.
 
     File order is arbitrary but fixed, so a prefix is reproducible. The train/held-out
     split is a seeded shuffle in pretrain.py, not a cut of this order.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} is missing. Download it once with: python -m mol_optim.zinc"
-        )
+        raise FileNotFoundError(f"{path} is missing. Run the 'zinc' step first.")
     with open(path) as data_file:
         header = next(data_file).strip()
         if header != "smiles":
@@ -51,20 +45,21 @@ def molecules(path: Path = DATA_PATH, limit: int | None = None) -> tuple[Chem.Mo
     return tuple(mols)
 
 
-if __name__ == "__main__":
-    if not DATA_PATH.exists():
-        DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-        print(f"downloading {DATA_URL}")
-        urllib.request.urlretrieve(DATA_URL, DATA_PATH)
-    digest = hashlib.sha256(DATA_PATH.read_bytes()).hexdigest()
-    if digest != DATA_SHA256:
+def run(settings: config.Settings) -> None:
+    spec = settings.zinc
+    if not spec.path.exists():
+        spec.path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"downloading {spec.url}")
+        urllib.request.urlretrieve(spec.url, spec.path)
+    digest = hashlib.sha256(spec.path.read_bytes()).hexdigest()
+    if digest != spec.sha256:
         raise ValueError(
-            f"{DATA_PATH} hashes to {digest}, not the pinned {DATA_SHA256}. "
-            "The upstream file changed; re-check it against TDC before trusting it."
+            f"{spec.path} hashes to {digest}, not the pinned {spec.sha256}. "
+            "The upstream file changed; re-check it before trusting it."
         )
-    mols = molecules()
+    mols = molecules(spec.path)
     atoms = sum(mol.GetNumAtoms() for mol in mols)
     print(
-        f"{DATA_PATH} — {len(mols)} molecules, {atoms} heavy atoms, "
+        f"{spec.path} — {len(mols)} molecules, {atoms} heavy atoms, "
         f"{atoms / len(mols):.1f} per molecule"
     )

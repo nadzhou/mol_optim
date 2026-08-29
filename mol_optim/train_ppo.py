@@ -10,6 +10,7 @@ is what `results/README.md` is about.
 """
 
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -18,7 +19,6 @@ import torch
 from rdkit import Chem
 
 from mol_optim import (
-    bindingdb,
     config,
     determinism,
     environment,
@@ -27,7 +27,6 @@ from mol_optim import (
     ppo,
     pretrain,
     results,
-    reward_pic50,
     rewards,
     seeds,
 )
@@ -293,77 +292,27 @@ def train(
     )
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--updates", type=int, default=60)
-    parser.add_argument("--reward", choices=("qed", "pic50"), default="pic50")
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--report-every", type=int, default=5)
-    parser.add_argument("--log", type=Path, default=None)
-    parser.add_argument("--checkpoint", type=Path, default=None)
-    parser.add_argument("--top-k", type=Path, default=None)
-    parser.add_argument(
-        "--seed-molecule",
-        type=int,
-        default=None,
-        help="index into seeds.choose(); required for pic50",
-    )
-    parser.add_argument(
-        "--max-steps", type=int, default=config.Config.max_steps_per_episode
-    )
-    parser.add_argument(
-        "--regressor", type=Path, default=Path("models/egfr_regressor.pt")
-    )
-    parser.add_argument("--pretrained-encoder", type=Path, default=None)
-    args = parser.parse_args()
-
-    init_mol = None
-    if args.reward == "qed":
-        reward_fn = rewards.qed
-    else:
-        reward = reward_pic50.load(args.regressor)
-        # Divided by 10 for the same reason train_dqn does it — the two runs have to be
-        # on one scale or the comparison is meaningless.
-        reward_fn = lambda mol: reward_pic50.score(reward, mol) / 10.0  # noqa: E731
-        if args.seed_molecule is not None:
-            init_mol = seeds.choose(bindingdb.load())[args.seed_molecule].mol
-            print(
-                f"starting from seed {args.seed_molecule}: "
-                f"{init_mol.GetNumHeavyAtoms()} heavy atoms, "
-                f"reward {reward_fn(init_mol):.4f}"
-            )
-
+def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
+    reward_fn = rewards.build(spec, settings.bindingdb.path)
+    init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
     if init_mol is None:
-        # The value head reads a state graph, and there is no graph before the first
-        # atom exists. DQN scores candidates only, so it does not have this problem.
-        raise SystemExit(
-            "PPO needs a starting molecule: pass --seed-molecule, or --reward qed is "
-            "not supported here because the empty state has no graph to value."
+        # The value head reads a state graph, and there is no graph before the first atom
+        # exists. DQN scores candidates only, so it does not have this problem.
+        raise ValueError(
+            f"agent {spec.name!r} is PPO and needs seed_molecule: the empty state has no "
+            "graph to value."
         )
-
-    run = train(
-        config.Config(
-            seed=args.seed,
-            init_mol=init_mol,
-            max_steps_per_episode=args.max_steps,
-        ),
-        config.PPOConfig(seed=args.seed),
-        reward_fn,
-        num_updates=args.updates,
-        log_path=args.log,
-        checkpoint_path=args.checkpoint,
-        report_every=args.report_every,
-        pretrained_encoder=args.pretrained_encoder,
-    )
-    best_molecule, best_reward = run.best
-    print(f"final_mean_reward {run.final_mean_reward:.4f}  in {run.seconds:.1f}s")
     print(
-        f"best: {best_reward:.4f}  "
-        f"{best_molecule.GetNumHeavyAtoms()} heavy atoms  "
-        f"{graph_key.canonical_hash(best_molecule)}"
+        f"starting from seed {spec.seed_molecule}: "
+        f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
     )
-    if args.top_k is not None:
-        results.top_k(run, args.top_k)
-        print(f"wrote {args.top_k}.png and {args.top_k}.sdf")
+    return train(
+        replace(spec.cfg, init_mol=init_mol),
+        spec.ppo,
+        reward_fn,
+        num_updates=spec.ppo.num_updates,
+        log_path=settings.runs / f"{spec.name}.csv",
+        checkpoint_path=settings.runs / f"{spec.name}.pt",
+        report_every=spec.report_every,
+        pretrained_encoder=spec.pretrained_encoder,
+    )

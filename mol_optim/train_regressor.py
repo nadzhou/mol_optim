@@ -94,34 +94,16 @@ def train_one(
     return model, best_mae, best_epoch
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=60)
-    parser.add_argument("--ensemble", type=int, default=5)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--checkpoint", type=Path, default=None)
-    parser.add_argument(
-        "--pretrained-encoder",
-        type=Path,
-        default=None,
-        help="the ZINC pretraining checkpoint; omitted means random init, the null",
-    )
-    parser.add_argument("--report-every", type=int, default=0)
-    args = parser.parse_args()
-
-    cfg = config.Config(seed=args.seed)
-    regressor_cfg = config.RegressorConfig(
-        seed=args.seed, epochs=args.epochs, ensemble_size=args.ensemble
-    )
-    compounds = bindingdb.load()
+def run(settings: config.Settings) -> None:
+    spec = settings.regressor
+    cfg = config.Config(seed=spec.cfg.seed)
+    compounds = bindingdb.load(settings.bindingdb.path)
     # Held out, not optionally: a regressor trained on a seed's series already knows the
-    # answer where the run begins. To test the alternative, drop the argument.
+    # answer where the run begins.
     chosen_seeds = seeds.choose(compounds)
     train_compounds, test_compounds = splits.scaffold_split(
         compounds,
-        regressor_cfg.test_fraction,
+        spec.cfg.test_fraction,
         held_out_scaffolds=seeds.held_out_scaffolds(chosen_seeds),
     )
     # By scaffold too, or the stopping epoch is chosen on molecules it has seen.
@@ -134,15 +116,15 @@ if __name__ == "__main__":
 
     started = time.perf_counter()
     models, validation_maes = [], []
-    for member in range(regressor_cfg.ensemble_size):
+    for member in range(spec.cfg.ensemble_size):
         model, mae, epoch = train_one(
             cfg,
-            regressor_cfg,
+            spec.cfg,
             train_compounds,
             validation_compounds,
-            seed=regressor_cfg.seed + member,
-            pretrained_encoder=args.pretrained_encoder,
-            report_every=args.report_every,
+            seed=spec.cfg.seed + member,
+            pretrained_encoder=spec.pretrained_encoder,
+            report_every=spec.report_every,
         )
         models.append(model)
         validation_maes.append(mae)
@@ -175,14 +157,15 @@ if __name__ == "__main__":
         f"in {time.perf_counter() - started:.0f}s"
     )
 
-    if args.checkpoint is not None:
+    if spec.checkpoint is not None:
+        spec.checkpoint.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
                 "models": [model.state_dict() for model in models],
                 "config": cfg,
-                "regressor_config": regressor_cfg,
+                "regressor_config": spec.cfg,
                 "featurization": featurize.signature(),
-                "pretrained_encoder": str(args.pretrained_encoder),
+                "pretrained_encoder": str(spec.pretrained_encoder),
                 # The reward's applicability domain needs to know what this was fitted on.
                 "train_keys": [
                     compound.mol.GetProp("_Name") for compound in train_compounds
@@ -191,6 +174,6 @@ if __name__ == "__main__":
                 "test_mae": float(np.abs(error).mean()),
                 "test_spearman": regressor.spearman(prediction.mean, test_labels),
             },
-            args.checkpoint,
+            spec.checkpoint,
         )
-        print(f"wrote {args.checkpoint}")
+        print(f"wrote {spec.checkpoint}")

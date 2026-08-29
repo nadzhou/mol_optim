@@ -1,15 +1,10 @@
 """Curves from a ZINC pretraining log. Reading, not training.
 
-    .venv/bin/python -m mol_optim.plot_pretrain \
-        runs/pretrain_zinc.csv --out runs/pretrain_curve.png
-
-Its own script rather than a flag on plot_run.py: the two logs share no columns.
-
-Reference lines are read out of the log, not passed in — a baseline typed on the command
-line is a baseline that can be typed wrong.
+Its own module rather than a flag on plot_run.py: the two logs share no columns.
+Reference lines are read out of the log, not passed in — a baseline typed into the config
+file is a baseline that can be typed wrong.
 """
 
-import argparse
 import csv
 from pathlib import Path
 
@@ -19,14 +14,13 @@ matplotlib.use("Agg")  # no display on this machine; write files only
 import matplotlib.pyplot as plt
 import numpy as np
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("log", type=Path)
-    parser.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args()
+from mol_optim import config
 
-    with open(args.log) as log_file:
+
+def run(settings: config.Settings, spec: config.PlotSpec) -> None:
+    with open(spec.inputs[0]) as log_file:
         rows = list(csv.DictReader(log_file))
+
     def column(name: str) -> np.ndarray:
         return np.array([float(row[name]) for row in rows])
 
@@ -39,11 +33,7 @@ if __name__ == "__main__":
     # Train is a mean over the epoch, held-out is measured at the end of it — which is
     # why epoch 1's train loss sits above its held-out loss.
     loss_axes.plot(
-        epochs,
-        column("train_loss"),
-        label="train (mean over the epoch)",
-        marker="o",
-        ms=3,
+        epochs, column("train_loss"), label="train (mean over the epoch)", marker="o", ms=3
     )
     loss_axes.plot(epochs, column("holdout_loss"), label="held out", marker="o", ms=3)
     loss_axes.plot(
@@ -86,11 +76,12 @@ if __name__ == "__main__":
     loss_axes.legend(loc="center right", fontsize=9)
     loss_axes.grid(alpha=0.25)
     accuracy_axes.set_ylabel("masked atoms named correctly")
-    accuracy_axes.set_xlabel("epoch over ZINC")
+    accuracy_axes.set_xlabel("epoch over the unlabelled set")
     accuracy_axes.set_ylim(0.7, 1.0)
     accuracy_axes.set_xticks(epochs)  # epochs are whole passes; 1.25 of one is not a thing
     accuracy_axes.legend(loc="center right", fontsize=9)
     accuracy_axes.grid(alpha=0.25)
     figure.tight_layout()
-    figure.savefig(args.out, dpi=150)
-    print(f"wrote {args.out}")
+    spec.out.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(spec.out, dpi=150)
+    print(f"wrote {spec.out}")

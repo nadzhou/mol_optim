@@ -8,6 +8,7 @@ from mol_optim import (
     rewards,
     train_dqn,
 )
+from tests import molecules
 from tests.molecules import NAMED
 
 SMALL = config.Config(
@@ -25,13 +26,13 @@ def hashes(run) -> tuple[str, ...]:
 
 
 def test_dqn_run_is_bitwise_reproducible():
-    first, second = train_dqn.train(SMALL, rewards.qed), train_dqn.train(SMALL, rewards.qed)
+    first, second = train_dqn.train(SMALL, molecules.size_reward), train_dqn.train(SMALL, molecules.size_reward)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
 
 def test_random_rollout_is_bitwise_reproducible():
-    first, second = baseline_random.rollout(SMALL, rewards.qed), baseline_random.rollout(SMALL, rewards.qed)
+    first, second = baseline_random.rollout(SMALL, molecules.size_reward), baseline_random.rollout(SMALL, molecules.size_reward)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
@@ -42,8 +43,8 @@ def test_different_seeds_give_different_runs():
     seeded = config.Config(
         init_mol=NAMED["ethanol"], episodes=3, max_steps_per_episode=4, seed=1
     )
-    assert hashes(baseline_random.rollout(SMALL, rewards.qed)) != hashes(
-        baseline_random.rollout(seeded, rewards.qed)
+    assert hashes(baseline_random.rollout(SMALL, molecules.size_reward)) != hashes(
+        baseline_random.rollout(seeded, molecules.size_reward)
     )
 
 

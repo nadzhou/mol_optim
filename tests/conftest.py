@@ -7,13 +7,20 @@ rather than once per module.
 Neither downloaded dataset is in version control, so a fresh checkout has neither. A
 test that needs one skips with the command that builds it rather than erroring, which is
 what lets CI run the rest of the suite on a clean clone.
+
+The paths come from the config dataclasses' own defaults, so the tests look where the
+default config file writes.
 """
 
 from pathlib import Path
 
 import pytest
 
-from mol_optim import bindingdb
+from mol_optim import bindingdb, config
+
+BINDINGDB_PATH = config.BindingDBSpec().path
+ZINC_PATH = config.ZincSpec().path
+BUILD_IT = "mol-optim docs/config.toml"
 
 
 def require(path: Path, command: str) -> None:
@@ -24,5 +31,5 @@ def require(path: Path, command: str) -> None:
 
 @pytest.fixture(scope="session")
 def compounds() -> tuple[bindingdb.Compound, ...]:
-    require(bindingdb.DATASET_PATH, "python -m mol_optim.fetch_bindingdb")
-    return bindingdb.load()
+    require(BINDINGDB_PATH, BUILD_IT)
+    return bindingdb.load(BINDINGDB_PATH)

@@ -20,7 +20,7 @@ import torch.nn as nn
 from rdkit import Chem
 from rdkit.Chem import Crippen
 
-from mol_optim import config, determinism, encoder, featurize
+from mol_optim import config, determinism, encoder, featurize, zinc
 
 NUM_ELEMENTS = len(featurize.ATOM_TYPES) + 1  # the featurization's "other" bucket included
 
@@ -374,62 +374,42 @@ def pretrain(
     )
 
 
-if __name__ == "__main__":
-    import argparse
+def run(settings: config.Settings) -> None:
+    spec = settings.pretrain
+    cfg = config.Config(seed=spec.cfg.seed)
+    molecules = zinc.molecules(settings.zinc.path, limit=spec.cfg.num_molecules)
+    print(f"{len(molecules)} molecules, {spec.cfg.num_holdout} held out")
 
-    from mol_optim import zinc
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument(
-        "--molecules", type=int, default=None, help="default: all of ZINC"
-    )
-    parser.add_argument("--holdout", type=int, default=5000)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--log", type=Path, default=None)
-    parser.add_argument("--checkpoint", type=Path, default=None)
-    parser.add_argument("--report-every", type=int, default=1)
-    args = parser.parse_args()
-
-    cfg = config.Config(seed=args.seed)
-    pretrain_cfg = config.PretrainConfig(
-        seed=args.seed,
-        num_molecules=args.molecules,
-        num_holdout=args.holdout,
-        epochs=args.epochs,
-    )
-    molecules = zinc.molecules(limit=pretrain_cfg.num_molecules)
-    print(f"{len(molecules)} ZINC molecules, {pretrain_cfg.num_holdout} held out")
-
-    run = pretrain(
+    result = pretrain(
         cfg,
-        pretrain_cfg,
+        spec.cfg,
         molecules,
-        log_path=args.log,
-        checkpoint_path=args.checkpoint,
-        report_every=args.report_every,
+        log_path=spec.log,
+        checkpoint_path=spec.checkpoint,
+        report_every=spec.report_every,
     )
     print(
-        f"prior {run.prior.loss:.4f} ({run.prior.accuracy:.3f} correct)  "
-        f"holdout {run.holdout[-1].loss:.4f} ({run.holdout[-1].accuracy:.3f})  "
-        f"shuffled context {run.control[-1].loss:.4f} ({run.control[-1].accuracy:.3f})  "
-        f"in {run.seconds:.0f}s"
+        f"prior {result.prior.loss:.4f} ({result.prior.accuracy:.3f} correct)  "
+        f"holdout {result.holdout[-1].loss:.4f} ({result.holdout[-1].accuracy:.3f})  "
+        f"shuffled context {result.control[-1].loss:.4f} "
+        f"({result.control[-1].accuracy:.3f})  in {result.seconds:.0f}s"
     )
 
-    # The logP probe, on the run's own held-out molecules, so nothing the encoder
-    # trained on reaches it. Fit on half, score on the other half, and run the same probe
-    # on an untrained encoder for the number to beat.
-    probe_molecules = run.holdout_molecules
+    # The logP probe, on the run's own held-out molecules, so nothing the encoder trained
+    # on reaches it. Fit on half, score on the other half, and run the same probe on an
+    # untrained encoder for the number to beat.
+    probe_molecules = result.holdout_molecules
     half = len(probe_molecules) // 2
-    torch.manual_seed(pretrain_cfg.seed + 1)  # a different draw from the run's own init
+    torch.manual_seed(spec.cfg.seed + 1)  # a different draw from the run's own init
     untrained = MaskedAtomPredictor(cfg)
     fit, test = probe_molecules[:half], probe_molecules[half:]
-    pretrained_r2 = logp_probe(run.model.encoder, fit, test, cfg)
+    pretrained_r2 = logp_probe(result.model.encoder, fit, test, cfg)
     random_r2 = logp_probe(untrained.encoder, fit, test, cfg)
     print(f"logP probe R^2  pretrained {pretrained_r2:.3f}  random init {random_r2:.3f}")
-    if args.checkpoint is not None:
-        # Read back what was just written: a checkpoint that does not load is the
-        # failure this step exists to rule out, and it costs a second to rule out here.
+
+    if spec.checkpoint is not None:
+        # Read back what was just written: a checkpoint that does not load is the failure
+        # this step exists to rule out, and it costs a second to rule out here.
         reloaded = MaskedAtomPredictor(cfg)
-        reloaded.encoder.load_state_dict(load_encoder(args.checkpoint, cfg))
-        print(f"wrote {args.checkpoint} and loaded it back")
+        reloaded.encoder.load_state_dict(load_encoder(spec.checkpoint, cfg))
+        print(f"wrote {spec.checkpoint} and loaded it back")

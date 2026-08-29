@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
+from mol_optim import config, molio, seeds
+
 # Each entry is a structure that has actually turned up in a run of this project, with
 # the reward that produced it. Aromatic rings are excluded where the aromatic form is
 # ordinary chemistry — a pyrazole is not a hydrazine.
@@ -72,49 +74,38 @@ def scaffold_of(mol: Chem.Mol) -> Chem.Mol:
     return MurckoScaffold.GetScaffoldForMol(mol)
 
 
-if __name__ == "__main__":
-    import argparse
-    from pathlib import Path
-
-    from mol_optim import bindingdb, molio, seeds
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("sdf", type=Path, help="molecules to audit, e.g. a top-k SDF")
-    parser.add_argument(
-        "--seed-molecule",
-        type=int,
-        default=None,
-        help="index into seeds.choose(); checks its scaffold survived",
-    )
-    args = parser.parse_args()
-
-    molecules = molio.read(args.sdf)
-    scaffold = None
-    if args.seed_molecule is not None:
-        seed = seeds.choose(bindingdb.load())[args.seed_molecule]
-        scaffold = scaffold_of(seed.mol)
-        print(f"seed {args.seed_molecule}: {Chem.MolToSmiles(scaffold)}")
-        print(f"  {audit(seed.mol, scaffold)}\n")
-
-    audits = [audit(mol, scaffold) for mol in molecules]
-    print(f"{'#':>3} {'atoms':>6} {'N':>3} {'N-N':>4} {'scaffold':>9}  motifs")
-    for index, row in enumerate(audits):
-        hits = ", ".join(
-            f"{name} x{count}" for name, count in row.motif_counts.items() if count
-        )
-        print(
-            f"{index:>3} {row.num_heavy_atoms:>6} {row.num_nitrogens:>3} "
-            f"{row.num_nitrogen_nitrogen_bonds:>4} "
-            f"{'-' if row.scaffold_intact is None else ('yes' if row.scaffold_intact else 'NO'):>9}"
-            f"  {hits or '-'}"
-        )
-
-    print(f"\nover {len(audits)} molecules:")
-    for name in MOTIFS:
-        carrying = sum(1 for row in audits if row.motif_counts[name])
-        print(f"  {name:>12}: {carrying}/{len(audits)}")
-    carrying = sum(1 for row in audits if row.num_nitrogen_nitrogen_bonds)
-    print(f"  {'any N-N bond':>12}: {carrying}/{len(audits)}")
+def run(settings: config.Settings) -> None:
+    spec = settings.audit
+    seed = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
+    scaffold = None if seed is None else scaffold_of(seed)
     if scaffold is not None:
-        intact = sum(1 for row in audits if row.scaffold_intact)
-        print(f"  {'scaffold':>12}: {intact}/{len(audits)} intact")
+        print(f"seed {spec.seed_molecule}: {Chem.MolToSmiles(scaffold)}")
+        print(f"  {audit(seed, scaffold)}\n")
+
+    for sdf_path in spec.sdf:
+        molecules = molio.read(sdf_path)
+        audits = [audit(mol, scaffold) for mol in molecules]
+        print(f"{sdf_path}")
+        print(f"{'#':>3} {'atoms':>6} {'N':>3} {'N-N':>4} {'scaffold':>9}  motifs")
+        for index, row in enumerate(audits):
+            hits = ", ".join(
+                f"{name} x{count}" for name, count in row.motif_counts.items() if count
+            )
+            intact = (
+                "-" if row.scaffold_intact is None else ("yes" if row.scaffold_intact else "NO")
+            )
+            print(
+                f"{index:>3} {row.num_heavy_atoms:>6} {row.num_nitrogens:>3} "
+                f"{row.num_nitrogen_nitrogen_bonds:>4} {intact:>9}  {hits or '-'}"
+            )
+
+        print(f"\nover {len(audits)} molecules:")
+        for name in MOTIFS:
+            carrying = sum(1 for row in audits if row.motif_counts[name])
+            print(f"  {name:>12}: {carrying}/{len(audits)}")
+        carrying = sum(1 for row in audits if row.num_nitrogen_nitrogen_bonds)
+        print(f"  {'any N-N bond':>12}: {carrying}/{len(audits)}")
+        if scaffold is not None:
+            intact = sum(1 for row in audits if row.scaffold_intact)
+            print(f"  {'scaffold':>12}: {intact}/{len(audits)} intact")
+        print()

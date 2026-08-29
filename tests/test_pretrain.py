@@ -28,8 +28,8 @@ def molecules() -> tuple:
     ZINC skip when it has not been downloaded. The checkpoint tests below do not, and
     they are the ones worth running everywhere.
     """
-    conftest.require(zinc.DATA_PATH, "python -m mol_optim.zinc")
-    return zinc.molecules(limit=4000)
+    conftest.require(conftest.ZINC_PATH, conftest.BUILD_IT)
+    return zinc.molecules(conftest.ZINC_PATH, limit=4000)
 
 
 def rng(seed: int = 0) -> np.random.Generator:

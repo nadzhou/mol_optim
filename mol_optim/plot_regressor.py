@@ -1,18 +1,11 @@
 """What the regressor got right, and where it knows it is guessing. Reading, not training.
 
-    .venv/bin/python -m mol_optim.plot_regressor \
-        models/egfr_regressor.pt --out runs/regressor.png
-
 Four panels: predicted against measured with the RL seeds marked, calibration by decile,
 and the two guardrails the reward is built on — ensemble disagreement against actual
-error,
-and nearest-neighbour Tanimoto against the same error. Either guardrail coming out flat
+error, and nearest-neighbour Tanimoto against the same error. Either guardrail coming out flat
 means it is decoration. The calibration panel is the one that says what the reward can
 and cannot express.
 """
-
-import argparse
-from pathlib import Path
 
 import matplotlib
 import numpy as np
@@ -23,17 +16,13 @@ from rdkit.Chem import rdFingerprintGenerator
 matplotlib.use("Agg")  # no display on this machine; write files only
 import matplotlib.pyplot as plt
 
-from mol_optim import bindingdb, regressor, seeds, splits
+from mol_optim import bindingdb, config, regressor, seeds, splits
 
 MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("checkpoint", type=Path)
-    parser.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args()
 
-    checkpoint = torch.load(args.checkpoint, weights_only=False)
+def run(settings: config.Settings, spec: config.PlotSpec) -> None:
+    checkpoint = torch.load(spec.inputs[0], weights_only=False)
     cfg = checkpoint["config"]
     models = []
     for state in checkpoint["models"]:
@@ -41,7 +30,7 @@ if __name__ == "__main__":
         model.load_state_dict(state)
         models.append(model)
 
-    compounds = bindingdb.load()
+    compounds = bindingdb.load(settings.bindingdb.path)
     train_keys = set(checkpoint["train_keys"])
     # Rebuilt from the same rule, then checked against the keys the run recorded: a plot
     # of the wrong test set is a plot of training data, and it would look better.
@@ -52,9 +41,7 @@ if __name__ == "__main__":
     )
     leaked = [c for c in test_compounds if c.mol.GetProp("_Name") in train_keys]
     if leaked:
-        raise ValueError(
-            f"{len(leaked)} test compounds are in the checkpoint's train_keys"
-        )
+        raise ValueError(f"{len(leaked)} test compounds are in the checkpoint's train_keys")
 
     measured = np.array([c.pic50 for c in test_compounds], dtype=np.float32)
     prediction = regressor.predict(models, [c.mol for c in test_compounds], cfg)
@@ -100,8 +87,8 @@ if __name__ == "__main__":
     scatter_axes.legend(loc="upper left", fontsize=9)
     scatter_axes.grid(alpha=0.25)
 
-    # Calibration: mean prediction against mean measurement, by decile of measurement.
-    # A slope under 1 is the model pulling everything toward the middle of its training
+    # Calibration: mean prediction against mean measurement, by decile of measurement. A
+    # slope under 1 is the model pulling everything toward the middle of its training
     # data, which is what caps the reward an agent can ever be paid.
     measured_order = np.argsort(measured)
     measured_deciles = np.array_split(measured_order, 10)
@@ -131,13 +118,11 @@ if __name__ == "__main__":
     spread_axes.set_xlabel("ensemble disagreement (standard deviation, pIC50)")
     spread_axes.set_ylabel("mean absolute error in that decile")
     spread_correlation = regressor.spearman(prediction.spread, error)
-    spread_axes.set_title(
-        f"disagreement vs error: rank correlation {spread_correlation:.2f}"
-    )
+    spread_axes.set_title(f"disagreement vs error: rank correlation {spread_correlation:.2f}")
     spread_axes.grid(alpha=0.25)
 
-    # Scaffold-split, so nothing here is a duplicate; does the remaining distance
-    # predict the error?
+    # Scaffold-split, so nothing here is a duplicate; does the remaining distance predict
+    # the error?
     train_fingerprints = [MORGAN.GetFingerprint(c.mol) for c in train_compounds]
     nearest = np.array(
         [
@@ -160,13 +145,12 @@ if __name__ == "__main__":
     domain_axes.set_xlabel("nearest training compound (Tanimoto)")
     domain_axes.set_ylabel("mean absolute error in that decile")
     domain_correlation = regressor.spearman(nearest, error)
-    domain_axes.set_title(
-        f"similarity vs error: rank correlation {domain_correlation:.2f}"
-    )
+    domain_axes.set_title(f"similarity vs error: rank correlation {domain_correlation:.2f}")
     domain_axes.grid(alpha=0.25)
 
     figure.tight_layout()
-    figure.savefig(args.out, dpi=150)
+    spec.out.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(spec.out, dpi=150)
     print(
         f"test MAE {error.mean():.4f}  "
         f"Spearman {regressor.spearman(prediction.mean, measured):.4f}\n"
@@ -181,5 +165,5 @@ if __name__ == "__main__":
         f"{nearest[domain_deciles[-1]].mean():.2f})\n"
         f"calibration slope {slope:.2f}, highest prediction {ceiling:.2f} against a "
         f"measured maximum of {measured.max():.2f}\n"
-        f"wrote {args.out}"
+        f"wrote {spec.out}"
     )
