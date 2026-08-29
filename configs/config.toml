@@ -1,0 +1,103 @@
+# The whole pipeline, as data. Run it with:
+#
+#     mol-optim configs/config.toml
+#
+# Paths are relative to the directory you run that from — the repository root.
+# Every key below matches a field of a frozen dataclass in mol_optim/config.py; a key
+# that dataclass does not have is an error, not a setting that silently does nothing.
+
+steps = ["zinc", "bindingdb", "pretrain", "regressor", "agents", "audit", "plots"]
+
+# Where the agents write their log, checkpoint and top-k.
+runs = "runs"
+
+# The unlabelled molecules the encoder is pretrained on. Swap the three values to
+# pretrain on a different set; the hash is what makes a changed upstream file fail loudly
+# instead of quietly moving the numbers.
+[zinc]
+url = "https://dataverse.harvard.edu/api/access/datafile/4170963"
+sha256 = "b65ee88f1838586571fc41200ee60fb7b97da55da72823bed72dc315af2fb48b"
+path = "data/zinc.tab"
+
+# The measured potency data the regressor is fitted to. `uniprot` and `construct` pick the
+# target out of a 9 GB table — change them and you have a different target.
+[bindingdb]
+url = "https://www.bindingdb.org/rwd/bind/downloads/BindingDB_All_202608_tsv.zip"
+md5 = "dac667f2d194ae6744104a7f87549db5"
+archive = "data/BindingDB_All_202608_tsv.zip"
+table = "BindingDB_All.tsv"
+path = "data/egfr_ic50.sdf"
+uniprot = "P00533"
+construct = "Epidermal growth factor receptor"
+
+[pretrain]
+epochs = 10
+num_holdout = 5000
+checkpoint = "models/zinc_encoder.pt"
+log = "runs/pretrain_zinc.csv"
+report_every = 1
+
+# Drop pretrained_encoder to fit the regressor from a random init — that is the null the
+# pretraining is measured against.
+[regressor]
+epochs = 60
+ensemble_size = 5
+pretrained_encoder = "models/zinc_encoder.pt"
+checkpoint = "models/egfr_regressor.pt"
+
+# One table per agent, run in the order they appear. `kind` picks the training loop out of
+# cli.AGENTS; `name` names everything the run writes under `runs` above. Anything that is
+# not an agent setting is a Config or PPOConfig knob, so an agent reads as one flat list.
+
+# The floor the agent has to beat. A curve that climbs but ties this is a broken agent.
+[[agents]]
+kind = "random"
+name = "random_pic50_seed0"
+seed_molecule = 0
+regressor = "models/egfr_regressor.pt"
+episodes = 1000
+max_steps_per_episode = 6   # 6, not 40: past that the run leaves the applicability domain
+
+[[agents]]
+kind = "dqn"
+name = "pilot_pic50_seed0"
+seed_molecule = 0
+regressor = "models/egfr_regressor.pt"
+pretrained_encoder = "models/zinc_encoder.pt"
+report_every = 25
+episodes = 1000
+max_steps_per_episode = 6
+
+# PPO on the same environment, reward and encoder, so a difference between what the two
+# build is a property of the algorithm. Uncomment to run it beside the DQN.
+# [[agents]]
+# kind = "ppo"
+# name = "ppo_pic50_seed0"
+# seed_molecule = 0
+# regressor = "models/egfr_regressor.pt"
+# pretrained_encoder = "models/zinc_encoder.pt"
+# report_every = 5
+# num_updates = 60
+# max_steps_per_episode = 6
+
+# What did the agent actually build? A reward curve does not answer that.
+[audit]
+sdf = ["runs/pilot_pic50_seed0_top.sdf"]
+seed_molecule = 0
+
+[[plots]]
+kind = "pretrain"
+inputs = ["runs/pretrain_zinc.csv"]
+out = "results/zinc-pretraining/pretrain_curve.png"
+
+[[plots]]
+kind = "regressor"
+inputs = ["models/egfr_regressor.pt"]
+out = "results/pic50-regressor/regressor.png"
+
+[[plots]]
+kind = "run"
+inputs = ["runs/pilot_pic50_seed0.csv"]
+out = "results/pic50-agent/pilot_pic50_seed0.png"
+ylabel = "predicted pIC50 / 10"
+random_baseline = 0.331

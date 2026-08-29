@@ -27,6 +27,8 @@ results/report.md
 docs/held_out_evaluation.md
 
 # The analysis layer, kept on disk and out of the repo: the package produces runs and
-# their top-k drawings (results.top_k); turning those into a report is analysis.
+# their top-k drawings (results.top_k); turning those into a report is analysis, and it
+# changes with whatever question is being asked this week.
 mol_optim/report.py
 tests/test_report.py
+analysis/
