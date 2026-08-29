@@ -29,8 +29,9 @@ Each name in `steps` maps to one entry in `mol_optim/cli.py`'s `STEPS` table.
 | `bindingdb` | the URL and hash in `[bindingdb]` | `data/egfr_ic50.sdf`, from a 593 MB download | one download, then a 9 GB scan |
 | `pretrain` | `data/zinc.tab` | `models/zinc_encoder.pt` | 7 min, 3.3 GB of memory |
 | `regressor` | `data/egfr_ic50.sdf` | `models/egfr_regressor.pt` | 11 min |
-| `agents` | the regressor and encoder checkpoints | one CSV, checkpoint and top-k per `[[agents]]` table | 2–5 min each |
+| `agents` | the regressor and encoder checkpoints | one CSV, checkpoint, top-k and manifest per `[[agents]]` table | 2–5 min each |
 | `audit` | the SDFs named in `[audit]` | its counts, to stdout | seconds |
+| `recovery` | the run CSVs named in `[recovery]` | how many real held-out analogs the run built, to stdout | seconds |
 | `plots` | whatever each `[[plots]]` table names | a PNG each, under `results/` | seconds |
 
 Both downloads are pinned by checksum, so a silently changed upstream file fails loudly
@@ -41,7 +42,8 @@ feature table from being loaded into a network trained against the old one.
 ## Changing the run
 
 **A different agent.** Add a `[[agents]]` table. `kind` picks the training loop out of
-`cli.AGENTS` — `dqn`, `ppo` or `random` — and `name` names everything that run writes.
+`cli.AGENTS` — `dqn`, `ppo`, `random` or `dqn_measured` — and `name` names everything
+that run writes.
 The tables run in the order they appear, so the random floor and the DQN that has to beat
 it live in one file:
 
@@ -49,7 +51,6 @@ it live in one file:
 [[agents]]
 kind = "random"
 name = "random_pic50_seed0"
-reward = "pic50"
 seed_molecule = 0
 episodes = 1000
 max_steps_per_episode = 6
@@ -63,8 +64,19 @@ dataclass has is an error, not a setting that silently does nothing.
 against its own measured pIC50. `max_steps_per_episode = 6` is deliberate: at 40 edits the
 agent leaves the regressor's applicability domain and the prediction stops meaning
 anything. `3` rather than `6` is the one change measured to improve recovery of real
-held-out compounds — 8 found against 7, 2 measured actives against 0 — and it cuts the N-N
-rate in the top-12 from 12/12 to 7/12.
+held-out compounds — 8 found against 7, 2 measured actives against 1 — and it cuts the
+N-N rate in the top-12 from 11/12 to 7/12.
+
+`dqn_measured` is the positive control, `configs/control.toml`: the same loop rewarded by
+measured pIC50 through a lookup, so nothing is fitted and nothing can be gamed. It is what
+says whether the fitted regressor or the search is what holds recovery down. Its reward is
+sparse — 10,548 graphs have a number and everything else scores zero — so read it as a
+bound on the search, never as an algorithm comparison.
+
+Every run also writes `runs/<name>.json` beside its CSV: the resolved agent spec, the git
+commit, and the torch, rdkit and numpy versions. A number whose settings live only in a
+config file someone has since edited cannot be reproduced, and this repo has one of those
+— see the note in `results/README.md`.
 
 PPO needs `seed_molecule`: its value head reads a state graph, and the empty molecule has
 none. DQN scores candidates only, so it does not have that problem. Give PPO the same
@@ -85,15 +97,22 @@ about 0.06 MAE. Point an agent at a different checkpoint with its own `regressor
 
 ## Look at what it built
 
-A climbing reward curve is not the result. The `audit` step is: it counts the
-substructures past runs have gone wrong in — hemiaminals, N-hydroxyls, chains of
-catenated nitrogen — and checks that the seed's scaffold survived. The `agents` step has
-already written each run's best distinct molecules as a drawing and an SDF.
+A climbing reward curve is not the result. Two steps are.
+
+`recovery` is the primary metric: every measured compound on the seed's scaffold is
+forced out of the regressor's training set, so a run that builds one has built a real
+analog its reward model never saw. It prints how many, and how many of those are active
+(pIC50 >= 8) and potent (>= 9). Seed 0 has 565 such analogs, 163 active, 36 potent.
+
+`audit` says what the molecules are: it counts the substructures past runs have gone
+wrong in — hemiaminals, N-hydroxyls, chains of catenated nitrogen — and checks that the
+seed's scaffold survived. The `agents` step has already written each run's best distinct
+molecules as a drawing and an SDF.
 
 ## Tests
 
 ```bash
-pytest -m "not slow"   # 104 tests, about 14 seconds
+pytest -m "not slow"   # 108 tests, about 14 seconds
 pytest                 # adds two 1000-episode pIC50 runs and a pretraining run
 ```
 

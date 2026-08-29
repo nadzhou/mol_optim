@@ -10,18 +10,33 @@ same with a PlotSpec. A new dataset or a retrained regressor is a change to the 
 file alone.
 """
 
+import dataclasses
+import json
+import subprocess
 import sys
 from pathlib import Path
+
+import numpy
+import rdkit
+import torch
 
 from mol_optim import config
 from mol_optim.chem import graph_key
 from mol_optim.datasets import bindingdb, zinc
 from mol_optim.nets import pretrain, regressor
-from mol_optim.agents import dqn, ppo, random_walk
-from mol_optim.report import audit, plot_pretrain, plot_regressor, plot_run, results
+from mol_optim.agents import dqn, dqn_measured, ppo, random_walk
+from mol_optim.report import (
+    audit,
+    plot_pretrain,
+    plot_regressor,
+    plot_run,
+    recovery,
+    results,
+)
 
 AGENTS = {
     "dqn": dqn.run,
+    "dqn_measured": dqn_measured.run,  # the positive control: measured pIC50, not a model
     "ppo": ppo.run,
     "random": random_walk.run,
 }
@@ -42,6 +57,37 @@ def _agents(settings: config.Settings) -> None:
                 f"there is {', '.join(sorted(AGENTS))}"
             )
         print(f"-- {spec.name} ({spec.kind})", flush=True)
+
+        # Written before the run, not after, so a run that crashes still says what it
+        # was. A CSV whose settings live only in a config file someone has since edited
+        # is a number nobody can reproduce — this repo has one of those already, the
+        # 0.859 in results/README.md that a later run could not match.
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        manifest = settings.runs / f"{spec.name}.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "agent": dataclasses.asdict(spec),
+                    "bindingdb_path": str(settings.bindingdb.path),
+                    "commit": commit.stdout.strip() or "not a git checkout",
+                    "versions": {
+                        "python": sys.version.split()[0],
+                        "torch": torch.__version__,
+                        "rdkit": rdkit.__version__,
+                        "numpy": numpy.__version__,
+                    },
+                    "torch_num_threads": torch.get_num_threads(),
+                },
+                indent=2,
+                default=str,
+            )
+            + "\n"
+        )
+
         run = AGENTS[spec.kind](settings, spec)
         best_molecule, best_reward = run.best
         print(
@@ -71,6 +117,7 @@ STEPS = {
     "regressor": regressor.run,
     "agents": _agents,
     "audit": audit.run,
+    "recovery": recovery.run,
     "plots": _plots,
 }
 

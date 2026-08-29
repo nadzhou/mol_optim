@@ -103,38 +103,84 @@ ranking is the property the agent actually depends on.
 
 ## The agent against predicted pIC50
 
-A pilot, not the deliverable: one seed scaffold of five, 1000 episodes, 6 edits, 292 s.
+One seed scaffold of five, 1000 episodes, seed 0. Two episode budgets, 3 edits and 6.
 
-![pIC50 pilot](pic50-agent/pilot_pic50_seed0.png)
+![pIC50 runs](pic50-agent/dqn_pic50_seed0_reproduced.png)
 
-Three lines, and the order matters. Random at the same budget is **0.331**. The seed
-handed back untouched is **0.738** — what the agent collects for taking the no-op every
-step. The DQN reaches **0.859** over the last 100 episodes and peaks at 0.925 near episode
-800. It crosses the no-op line around episode 510 and stays above it, so it is finding
-edits the regressor scores above the lead rather than learning to sit still.
+Three lines, and the order matters. Random at the same budget is **0.331**. The seed handed
+back untouched is **0.738** — what the agent collects for taking the no-op every step. The
+DQN reaches **0.761** at 3 edits and **0.745** at 6, over the last 100 episodes.
 
-Two things in the curve worth naming. The first 180 episodes run *below* random, down to
-0.15: epsilon is near 1.0 and the agent has not learned to stay inside the domain, so most
-episodes end at zero. And the MSE loss climbs from 0.07 to 0.30 rather than falling,
-because the reward the agent reaches keeps growing and the TD targets grow with it. It
-flattens after episode 800; a loss that kept climbing would be the thing to chase.
+That is the whole result, and it is a smaller one than it looks: the agent ends up roughly
+where sitting still would put it. Over the last 100 episodes the 3-edit run beats the
+untouched seed 74 times and the 6-edit run 44 times. The curve climbing from 0.15 to 0.75
+is the agent learning to stay inside the regressor's applicability domain — 36 episodes of
+1000 still end at zero at 3 edits, 107 at 6 — not learning to improve on the lead.
 
-![pIC50 pilot top molecules](pic50-agent/pilot_pic50_seed0_top.png)
+The MSE loss climbs rather than falls, from 0.07 to 0.28, because the reward the agent
+reaches keeps growing and the TD targets grow with it.
 
-Best single molecule 0.995 — predicted pIC50 9.95 at 24 heavy atoms, from a seed measured
-at 10.00 and predicted at 7.38. The agent games the regressor again, and this time the
-molecule looks plausible, which is the harder problem.
+![pIC50 top molecules](pic50-agent/pilot_pic50_seed0_top.png)
 
-Run the audit and it stops looking plausible:
+Best single molecule 0.916 at 6 edits, 0.907 at 3 — predicted pIC50 9.16 and 9.07, from a
+seed measured at 10.00 and predicted at 7.38. The drawing above is from the earlier
+unreproducible run; the molecules differ, the conclusion does not.
 
+Run the audit and the plausible-looking molecules stop looking plausible:
+
+```bash
+mol-optim configs/recheck.toml
 ```
-python -m mol_optim.audit runs/pilot_pic50_seed0_top.sdf --seed-molecule 0
-```
 
-All 12 keep the seed's scaffold, and all 12 carry a nitrogen–nitrogen bond — 7 of them an
-aliphatic N–N, 4 a chain of three. Against QED the agent reached for strained rings;
-against a fitted model it reached for catenated nitrogen. Same behaviour, and only one of
-them is visible without looking.
+At 6 edits 11 of the top 12 carry a nitrogen–nitrogen bond and 10 keep the seed's
+scaffold; at 3 edits it is 7 of 12 with the scaffold intact in all 12. Against QED the
+agent reached for strained rings; against a fitted model it reached for catenated
+nitrogen. Same behaviour, and only one of them is visible without looking.
 
-Re-running the command reproduced this run exactly — same final mean, same best molecule,
-same graph hash.
+## What the agent recovers, and the honest-reward control
+
+The reward curve is not the result. What is: of the **565 measured compounds on seed 0's
+scaffold**, every one of them held out of the regressor's training set, how many did the
+run actually build?
+
+| run | reward | distinct | found | ≥8 | ≥9 |
+|---|---|---:|---:|---:|---:|
+| DQN, 3 edits | regressor | 318 | 8 | 2 | 1 |
+| DQN, 6 edits | regressor | 437 | 7 | 1 | 0 |
+| DQN, 3 edits | **measured** | 279 | **12** | **4** | 1 |
+| DQN, 6 edits | **measured** | 328 | 9 | 1 | 0 |
+
+![the control against the fitted reward](pic50-agent/measured_control_vs_regressor.png)
+
+The last two rows are the positive control, `configs/control.toml`: the same loop and the
+same budget, rewarded by *measured* pIC50 through a lookup, so nothing is fitted and there
+is nothing to game. It recovers 12 analogs of 565 against the fitted regressor's 8 — 2.1%
+against 1.4% — and doubles the actives, 4 against 2.
+
+**That is the number that reframes the project.** A reward that cannot be gamed at all,
+given the same 1000 episodes, does not reach a different order of magnitude. Most of what
+holds recovery near 2% is not the reward model. It is the search, the action space, or the
+budget.
+
+Read the control as a bound rather than a comparison: its reward is zero for every graph
+BindingDB has no number for, so it gets no gradient toward an analog until it lands on one
+exactly, and its curve (blue) spends 300 episodes at the floor because of it. A
+better-shaped honest reward could beat 12. But the fitted regressor is dense and smooth
+and still finds 8.
+
+## A number that did not reproduce
+
+An earlier run of the 6-edit configuration, logged 2026-08-20 and reported here as
+**0.859** with a best molecule of 0.995, cannot be reproduced. The same configuration run
+today gives 0.745 and a best of 0.916, four times over: twice on current code, once with
+`OMP_NUM_THREADS=1`, and once from a worktree at 811e2ff, the commit that predates the
+2026-08-20 run. All four agree bitwise. Every file that could move the number — the
+environment, the reward, the featurization, the encoder, the Q-network, the replay buffer,
+the seeding and the training loop — is unchanged between that commit and now.
+
+So the 0.859 came from a working tree that was never committed, and it is gone. Nothing
+above depends on it any more; the 0.745 that replaces it is weaker, and it is real.
+
+Every run now writes `runs/<name>.json` beside its CSV — the resolved agent spec, the git
+commit, and the torch, rdkit and numpy versions — so the next number that moves can be
+traced instead of argued about.

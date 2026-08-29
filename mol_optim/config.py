@@ -162,6 +162,12 @@ class AuditSpec:
 
 
 @dataclass(frozen=True)
+class RecoverySpec:
+    logs: tuple[Path, ...] = ()
+    seed_molecule: int | None = None
+
+
+@dataclass(frozen=True)
 class PlotSpec:
     kind: str = "run"  # a key of cli.PLOTS
     out: Path = Path("results/plot.png")
@@ -182,6 +188,7 @@ class Settings:
     regressor: RegressorSpec
     agents: tuple[AgentSpec, ...]
     audit: AuditSpec
+    recovery: RecoverySpec
     plots: tuple[PlotSpec, ...]
 
 
@@ -265,6 +272,7 @@ def load(path: Path) -> Settings:
         ),
         agents=tuple(agents),
         audit=build(AuditSpec, table.pop("audit", {})),
+        recovery=build(RecoverySpec, table.pop("recovery", {})),
         plots=tuple(build(PlotSpec, plot) for plot in table.pop("plots", [])),
     )
     if table:
