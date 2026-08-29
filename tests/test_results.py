@@ -7,7 +7,7 @@ an argmax that returns the index instead of the molecule fails much later, in a 
 
 import pytest
 
-from mol_optim import results
+from mol_optim import molio, results
 from tests.molecules import NAMED
 
 MOLECULES = (NAMED["methane"], NAMED["ethanol"], NAMED["benzene"], NAMED["aspirin"])
@@ -25,3 +25,21 @@ def test_the_final_mean_is_the_last_hundred_episodes_and_not_the_whole_run():
     # all 600 reports 0.167 and the comparison against random silently fails.
     finished = run(tuple([0.0] * 500 + [1.0] * 100))
     assert finished.final_mean_reward == pytest.approx(1.0)
+
+
+# --- top_k: the drawing and SDF a run writes behind --top-k ---
+#
+# Deduplication is the whole point. An agent that finds one good molecule finds it in
+# hundreds of episodes, so a top-12 that does not deduplicate is a grid of twelve
+# copies of one picture -- which looks like a result, and is one molecule.
+
+def test_one_molecule_found_three_hundred_times_is_one_entry(tmp_path):
+    # The failure this module exists to prevent: without the dedup this SDF has four
+    # records and the grid has four identical pictures.
+    stem = tmp_path / "top"
+    repeated = tuple([NAMED["aspirin"]] * 300 + [NAMED["caffeine"]])
+    rewards = tuple([0.9] * 300 + [0.4])
+    results.top_k(run(rewards, repeated), stem, k=12)
+
+    written = molio.read(stem.with_suffix(".sdf"))
+    assert len(written) == 2

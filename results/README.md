@@ -5,9 +5,14 @@ first, then the encoder, then the reward model, then the agent. The numbers besi
 one are from the run that drew it, and the text says what was measured and what went
 wrong.
 
-These are copies. Runs write into `runs/`, which is not tracked, because the CSV logs and
-the 21 MB checkpoints beside them are regenerable and the plots are the part worth
-reading.
+[`report.md`](report.md) beside this file is the generated companion: the same runs as
+tables, with predicted pIC50 against each seed's own measured value and the audit columns
+next to them. This file is the prose; that one is the numbers, and it is rewritten by
+`python -m mol_optim.report` rather than by hand.
+
+The figures are written here directly by the plotting steps. Runs write into `runs/`,
+which is not tracked, because the CSV logs and the 21 MB checkpoints beside them are
+regenerable and the plots are the part worth reading.
 
 ## The QED control
 

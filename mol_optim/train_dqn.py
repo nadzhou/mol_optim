@@ -23,7 +23,6 @@ from mol_optim import (
     graph_key,
     pretrain,
     replay_buffer,
-    report,
     results,
     reward_pic50,
     rewards,
@@ -303,5 +302,5 @@ if __name__ == "__main__":
         f"{graph_key.canonical_hash(best_molecule)}"
     )
     if args.top_k is not None:
-        report.top_k(run, args.top_k)
+        results.top_k(run, args.top_k)
         print(f"wrote {args.top_k}.png and {args.top_k}.sdf")

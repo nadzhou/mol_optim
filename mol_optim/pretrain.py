@@ -107,8 +107,8 @@ def holdout_split(
     """(training, held out), by a seeded shuffle rather than a cut of file order.
 
     ZINC's order is not random — a block from one end could be one supplier. Takes the
-    generator rather than seeding its own, so finetune_zinc.py can reproduce a finished
-    run's held-out molecules without re-running the pretraining.
+    generator rather than seeding its own, so a caller can reproduce a finished run's
+    held-out molecules without re-running the pretraining.
     """
     order = rng.permutation(len(molecules))
     return (
