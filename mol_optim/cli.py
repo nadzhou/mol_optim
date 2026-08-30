@@ -26,9 +26,7 @@ from mol_optim.datasets import bindingdb, subset, zinc
 from mol_optim.nets import pretrain, ranker, regressor
 from mol_optim.agents import (
     dqn,
-    dqn_measured,
     evolutionary,
-    evolutionary_measured,
     ppo,
     random_walk,
 )
@@ -44,9 +42,7 @@ from mol_optim.report import (
 
 AGENTS = {
     "dqn": dqn.run,
-    "dqn_measured": dqn_measured.run,  # the positive control: measured pIC50, not a model
     "evolutionary": evolutionary.run,
-    "evolutionary_measured": evolutionary_measured.run,
     "ppo": ppo.run,
     "random": random_walk.run,
 }

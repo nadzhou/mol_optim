@@ -18,7 +18,6 @@ import pytest
 
 from mol_optim import config
 from mol_optim.datasets import bindingdb
-from mol_optim.env import measured
 
 BINDINGDB_PATH = config.BindingDBSpec().path
 ZINC_PATH = config.ZincSpec().path
@@ -36,9 +35,3 @@ def compounds() -> tuple[bindingdb.Compound, ...]:
     require(BINDINGDB_PATH, BUILD_IT)
     return bindingdb.load(BINDINGDB_PATH)
 
-
-@pytest.fixture(scope="session")
-def measured_table() -> dict[str, float]:
-    """Hashing 10,850 molecules takes seven seconds; four tests want the same table."""
-    require(BINDINGDB_PATH, BUILD_IT)
-    return measured.load(BINDINGDB_PATH)
