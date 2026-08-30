@@ -13,12 +13,17 @@ import numpy as np
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import seeds
+from mol_optim.chem import fragments, seeds
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, rewards
 from mol_optim.report import results
 
 
-def rollout(cfg: config.Config, reward_fn: Callable[[Chem.Mol], float]) -> results.Run:
+def rollout(
+    cfg: config.Config,
+    reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
+) -> results.Run:
     determinism.seed_everything(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
 
@@ -27,10 +32,10 @@ def rollout(cfg: config.Config, reward_fn: Callable[[Chem.Mol], float]) -> resul
     started = time.perf_counter()
 
     for _ in range(cfg.episodes):
-        episode = environment.reset(cfg)
+        episode = environment.reset(cfg, library)
         while True:
             choice = int(rng.integers(len(episode.valid_actions)))
-            result = environment.step(episode, choice, reward_fn, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg, library)
             if result.terminated:
                 break
         episode_rewards.append(result.reward)
@@ -47,4 +52,8 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
     reward = rewards.load(spec.regressor, settings.bindingdb.path)
     reward_fn = lambda mol: rewards.score(reward, mol) / rewards.PIC50_SCALE
     init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
-    return rollout(replace(spec.cfg, init_mol=init_mol), reward_fn)
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
+    return rollout(replace(spec.cfg, init_mol=init_mol), reward_fn, library)

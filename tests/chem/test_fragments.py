@@ -91,11 +91,8 @@ def test_substitutions_include_plain_removal():
 def test_fragment_action_space_is_deduplicated_and_ordered():
     """environment._deduplicated is what both action spaces share; order is the hash."""
     library = (_fragment("*C"), _fragment("*OC"))
-    action_space = environment.fragment_actions(library)
-    cfg = environment.config.Config()
-
-    first = action_space(Chem.MolFromSmiles("c1ccccc1"), cfg)
-    again = action_space(Chem.MolFromSmiles("c1ccccc1"), cfg)
+    first = environment.valid_actions(Chem.MolFromSmiles("c1ccccc1"), library)
+    again = environment.valid_actions(Chem.MolFromSmiles("c1ccccc1"), library)
 
     hashes = [graph_key.canonical_hash(m) for m in first]
     assert hashes == sorted(hashes)

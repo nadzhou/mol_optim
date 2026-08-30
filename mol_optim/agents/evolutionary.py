@@ -22,7 +22,8 @@ import numpy as np
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import graph_key, seeds
+from mol_optim.chem import fragments, graph_key, seeds
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, rewards
 from mol_optim.report import results
 
@@ -36,6 +37,7 @@ def _random_path(
     reward_fn: Callable[[Chem.Mol], float],
     cfg: config.Config,
     rng: np.random.Generator,
+    library: tuple[fragments.Fragment, ...],
 ) -> tuple[tuple[Chem.Mol, ...], float]:
     """Extends a prefix of a path with uniform random edits, to the full edit budget.
 
@@ -46,13 +48,13 @@ def _random_path(
     episode = environment.Episode(
         state=state,
         num_steps_taken=len(prefix),
-        valid_actions=environment.valid_actions(state, cfg),
+        valid_actions=environment.valid_actions(state, library),
     )
     path = list(prefix)
     reward = 0.0
     while True:
         choice = int(rng.integers(len(episode.valid_actions)))
-        result = environment.step(episode, choice, reward_fn, cfg)
+        result = environment.step(episode, choice, reward_fn, cfg, library)
         path.append(result.state)
         reward = result.reward
         if result.terminated:
@@ -62,6 +64,7 @@ def _random_path(
 def search(
     cfg: config.Config,
     reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
     log_path: Path | None = None,
     report_every: int = 0,
 ) -> results.Run:
@@ -77,7 +80,7 @@ def search(
     evaluated_molecules: list[Chem.Mol] = []
     started = time.perf_counter()
 
-    population = [_random_path((), reward_fn, cfg, rng) for _ in range(POPULATION)]
+    population = [_random_path((), reward_fn, cfg, rng, library) for _ in range(POPULATION)]
     for generation in range(generations):
         for path, reward in population:
             evaluated_rewards.append(reward)
@@ -104,7 +107,7 @@ def search(
         while len(population) < POPULATION:
             parent = survivors[int(rng.integers(len(survivors)))][0]
             cut = int(rng.integers(cfg.max_steps_per_episode))
-            population.append(_random_path(parent[:cut], reward_fn, cfg, rng))
+            population.append(_random_path(parent[:cut], reward_fn, cfg, rng, library))
 
     if log_file is not None:
         log_file.close()
@@ -124,9 +127,14 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
             f"starting from seed {spec.seed_molecule}: "
             f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
         )
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
     return search(
         replace(spec.cfg, init_mol=init_mol),
         reward_fn,
+        library,
         log_path=settings.runs / f"{spec.name}.csv",
         report_every=spec.report_every,
     )

@@ -33,11 +33,11 @@ def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
 def train(
     cfg: config.Config,
     reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
     report_every: int = 0,
     pretrained_encoder: Path | None = None,
-    action_space: environment.ActionSpace = environment.valid_actions,
 ) -> results.Run:
     determinism.seed_everything(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
@@ -65,7 +65,7 @@ def train(
 
     for episode_index in range(cfg.episodes):
         epsilon = epsilon_at_episode(episode_index, cfg)
-        episode = environment.reset(cfg, action_space)
+        episode = environment.reset(cfg, library)
         episode_losses: list[float] = []
         # Carried across the loop: featurizing these twice is a large share of a step.
         candidates = featurize.graphs(episode.valid_actions)  # num_candidates graphs
@@ -82,9 +82,7 @@ def train(
                     )  # [num_candidates, 1]
                 choice = int(torch.argmax(q_candidates))
 
-            result = environment.step(
-                episode, choice, reward_fn, cfg, action_space
-            )
+            result = environment.step(episode, choice, reward_fn, cfg, library)
             next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
             next_candidates = featurize.graphs(episode.valid_actions)
             buffer.push(
@@ -210,20 +208,17 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
             f"starting from seed {spec.seed_molecule}: "
             f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
         )
-    action_space = environment.valid_actions
-    if spec.fragment_actions:
-        library = fragments.library(
-            [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
-        )
-        print(f"fragment action space: {len(library)} substituents")
-        action_space = environment.fragment_actions(library)
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
 
     return train(
         replace(spec.cfg, init_mol=init_mol),
         reward_fn,
+        library,
         log_path=settings.runs / f"{spec.name}.csv",
         checkpoint_path=settings.runs / f"{spec.name}.pt",
         report_every=spec.report_every,
         pretrained_encoder=spec.pretrained_encoder,
-        action_space=action_space,
     )

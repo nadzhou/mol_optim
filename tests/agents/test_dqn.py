@@ -4,13 +4,20 @@ import numpy as np
 import pytest
 import torch
 
+from rdkit import Chem
+
 from mol_optim import config
-from mol_optim.chem import featurize
+from mol_optim.chem import featurize, fragments
 from mol_optim.nets import pretrain, q_network
 from mol_optim.env import environment
 from mol_optim.agents import dqn
 from tests import molecules
 from tests.molecules import NAMED
+
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O", "*c1ccccc1", "*N(C)C")
+)
 
 SMALL = config.Config(
     init_mol=NAMED["ethanol"],
@@ -58,6 +65,7 @@ def test_a_pretrained_encoder_reaches_the_training_loop(tmp_path):
     dqn.train(
         config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
         molecules.size_reward,
+        LIBRARY,
         checkpoint_path=initialization,
         pretrained_encoder=encoder_path,
     )
@@ -78,16 +86,19 @@ def test_target_network_lags_and_tracks_the_online_network(tmp_path):
     dqn.train(
         config.Config(**{**SMALL.__dict__, "batch_size": 10**6}),
         molecules.size_reward,
+        LIBRARY,
         checkpoint_path=never_updates,
     )
     dqn.train(
         config.Config(**{**SMALL.__dict__, "polyak": 1.0}),
         molecules.size_reward,
+        LIBRARY,
         checkpoint_path=frozen_target,
     )
     dqn.train(
         config.Config(**{**SMALL.__dict__, "polyak": 0.0}),
         molecules.size_reward,
+        LIBRARY,
         checkpoint_path=copied_target,
     )
 
@@ -113,7 +124,7 @@ def test_segment_max_over_ragged_candidate_sets_matches_the_obvious_loop():
     torch.manual_seed(0)
     network = q_network.MolDQN(cfg)
     candidate_sets = [
-        environment.valid_actions(NAMED[name], cfg)
+        environment.valid_actions(NAMED[name], LIBRARY)
         for name in ("methane", "benzene", "aspirin", "caffeine")
     ]  # ragged: 4 to a few hundred candidates
     steps_remaining = np.array([1.0, 7.0, 19.0, 40.0])

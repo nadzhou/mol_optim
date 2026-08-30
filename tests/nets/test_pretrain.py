@@ -13,11 +13,12 @@ import numpy as np
 import pytest
 import torch
 
+from rdkit import Chem
+
 from mol_optim import config
 from mol_optim.chem import featurize
 from mol_optim.datasets import zinc
 from mol_optim.nets import pretrain
-from mol_optim.env import environment
 from tests import conftest
 
 CFG = config.Config()
@@ -53,7 +54,7 @@ def test_the_head_cannot_see_the_masked_atom():
     # the task is free.
     torch.manual_seed(0)
     model = pretrain.MaskedAtomPredictor(CFG)
-    single_atoms = environment.valid_actions(None, CFG)  # one molecule per cfg.atom_types
+    single_atoms = [Chem.MolFromSmiles(s) for s in ("C", "O", "N")]
     assert len(single_atoms) > 1
 
     logits = [

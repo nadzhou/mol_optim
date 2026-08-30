@@ -16,7 +16,7 @@ from rdkit import Chem
 
 from mol_optim import config
 
-# Featurization alphabet, not the action alphabet (cfg.atom_types sizes that).
+# Featurization alphabet: wider than any library, so it costs input width only.
 ATOM_TYPES = ("C", "N", "O", "F", "S", "Cl", "Br")
 HYBRIDIZATIONS = (
     Chem.HybridizationType.SP,

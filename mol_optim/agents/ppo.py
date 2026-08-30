@@ -16,8 +16,9 @@ import torch
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import featurize, graph_key, seeds
+from mol_optim.chem import featurize, fragments, graph_key, seeds
 from mol_optim.nets import policy, pretrain
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, rewards
 from mol_optim.report import results
 
@@ -48,6 +49,7 @@ def collect(
     ppo_cfg: config.PPOConfig,
     reward_fn: Callable[[Chem.Mol], float],
     rng: np.random.Generator,
+    library: tuple[fragments.Fragment, ...],
 ) -> tuple[Rollout, list[float], list[Chem.Mol]]:
     """Run `rollout_episodes` episodes under the current policy, storing every step."""
     rollout = Rollout()
@@ -55,7 +57,7 @@ def collect(
     episode_molecules: list[Chem.Mol] = []
 
     for _ in range(ppo_cfg.rollout_episodes):
-        episode = environment.reset(cfg)
+        episode = environment.reset(cfg, library)
         # Per episode, so the GAE recursion cannot step over an episode boundary.
         first = len(rollout)
         candidates = featurize.graphs(episode.valid_actions)
@@ -76,7 +78,7 @@ def collect(
                     )[0]
                 )
 
-            result = environment.step(episode, choice, reward_fn, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg, library)
 
             rollout.candidates.append(candidates)
             rollout.states.append(state_graphs)
@@ -209,6 +211,7 @@ def train(
     cfg: config.Config,
     ppo_cfg: config.PPOConfig,
     reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
     num_updates: int,
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
@@ -234,7 +237,7 @@ def train(
 
     for update_index in range(num_updates):
         rollout, episode_rewards, episode_molecules = collect(
-            network, cfg, ppo_cfg, reward_fn, rng
+            network, cfg, ppo_cfg, reward_fn, rng, library
         )
         policy_loss, value_loss, entropy = update(
             network, optimizer, rollout, cfg, ppo_cfg, rng
@@ -292,10 +295,16 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
         f"starting from seed {spec.seed_molecule}: "
         f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
     )
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
+
     return train(
         replace(spec.cfg, init_mol=init_mol),
         spec.ppo,
         reward_fn,
+        library,
         num_updates=spec.ppo.num_updates,
         log_path=settings.runs / f"{spec.name}.csv",
         checkpoint_path=settings.runs / f"{spec.name}.pt",

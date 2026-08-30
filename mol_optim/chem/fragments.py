@@ -28,6 +28,9 @@ def _split_out_substituent(mol: Chem.Mol, bond: Chem.Bond) -> Chem.Mol | None:
     smaller = min(pieces, key=lambda piece: piece.GetNumHeavyAtoms())
     if smaller.GetNumHeavyAtoms() - 1 > MAX_FRAGMENT_ATOMS:  # the dummy counts as heavy
         return None
+    # A net charge means the cut split an ion pair: nitro's N-O gives a bare [O-].
+    if sum(atom.GetFormalCharge() for atom in smaller.GetAtoms()) != 0:
+        return None
     for atom in smaller.GetAtoms():
         atom.SetIsotope(0)
     if Chem.SanitizeMol(smaller, catchErrors=True):
@@ -71,6 +74,13 @@ def attach(core: Chem.Mol, atom_idx: int, fragment: Fragment) -> Chem.Mol | None
         if atom.GetIdx() >= offset and atom.GetAtomicNum() == 0
     )
     anchor_idx = combined.GetAtomWithIdx(dummy_idx).GetNeighbors()[0].GetIdx()
+    # One end must be carbon. Hanging *N on a nitrogen is what built the hydrazines and
+    # anilino-oxy linkages: 0 of seed 0's 51 targets carry an acyclic heteroatom pair.
+    if (
+        combined.GetAtomWithIdx(atom_idx).GetAtomicNum() != 6
+        and combined.GetAtomWithIdx(anchor_idx).GetAtomicNum() != 6
+    ):
+        return None
     combined.AddBond(atom_idx, anchor_idx, Chem.BondType.SINGLE)
     combined.RemoveAtom(dummy_idx)  # last: it renumbers everything above it
     if Chem.SanitizeMol(combined, catchErrors=True):

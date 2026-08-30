@@ -17,11 +17,6 @@ class Config:
     seed: int = 0
 
     init_mol: str | None = None
-    atom_types: tuple[str, ...] = ("C", "O", "N")
-    allow_removal: bool = True
-    allow_no_modification: bool = True
-    allow_bonds_between_rings: bool = False
-    allowed_ring_sizes: tuple[int, ...] = (5, 6)
     max_steps_per_episode: int = 40
     # Separate from gamma: this discounts by steps remaining in the episode.
     discount_factor: float = 0.9
@@ -155,8 +150,6 @@ class AgentSpec:
     pretrained_encoder: Path | None = None
     report_every: int = 25
     top_k: int = 12
-    # Substituent-level actions; library mined from [bindingdb] path.
-    fragment_actions: bool = False
     cfg: Config = Config()
     ppo: PPOConfig = PPOConfig()
 
@@ -186,7 +179,7 @@ class ReachableSpec:
     seed_molecule: int | None = None  # index into seeds.choose()
     # The frontier grows about 40-fold a level: 3 is seconds, 5 is tens of minutes.
     max_depth: int = 3
-    cfg: Config = Config()  # the action space being measured
+    cfg: Config = Config()
 
 
 @dataclass(frozen=True)

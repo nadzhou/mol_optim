@@ -1,67 +1,63 @@
-"""The edit lower bound: it has to be sound, or the ceiling it reports is fiction.
+"""The ceiling: how many held-out analogs the action space can build at all.
 
-Soundness is the whole property. A bound that is too high says an analog is out of
-reach when it is not, and the conclusion in docs/where_this_stands.md turns on exactly
-that call. So the last test walks the real action space two edits deep and checks the
-bound never exceeds the distance BFS actually found.
+Every recovery number is a fraction of this, so the enumeration has to be exact — no
+duplicates, no state counted at a depth it cannot be reached in.
 """
 
 from rdkit import Chem
 
-from mol_optim import config
-from mol_optim.chem import graph_key
+from mol_optim.chem import fragments, graph_key
 from mol_optim.env import environment
-from mol_optim.report import reachable
 from tests.molecules import NAMED
 
-CFG = config.Config()
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O")
+)
 
 
-def test_no_edits_between_one_molecule_and_itself():
-    assert reachable.edit_lower_bound(NAMED["aspirin"], NAMED["aspirin"], CFG) == 0
-
-
-def test_an_element_the_action_space_cannot_add_is_unreachable():
-    # Fluorine is not in atom_types, and no sequence of edits introduces one.
-    assert (
-        reachable.edit_lower_bound(
-            Chem.MolFromSmiles("c1ccccc1"), Chem.MolFromSmiles("Fc1ccccc1"), CFG
-        )
-        is None
-    )
-
-
-def test_an_element_the_seed_already_carries_is_only_unreachable_in_excess():
-    seed = Chem.MolFromSmiles("Fc1ccccc1")
-    assert reachable.edit_lower_bound(seed, Chem.MolFromSmiles("Fc1ccccc1C"), CFG) == 1
-    assert (
-        reachable.edit_lower_bound(seed, Chem.MolFromSmiles("Fc1ccccc1F"), CFG) is None
-    )
-
-
-def test_removals_and_additions_both_count():
-    # One O out, two C in.
-    assert (
-        reachable.edit_lower_bound(
-            Chem.MolFromSmiles("CCO"), Chem.MolFromSmiles("CCCC"), CFG
-        )
-        == 3
-    )
-
-
-def test_bound_never_exceeds_the_distance_the_action_space_actually_walks():
-    seed = NAMED["ethanol"]
-    seen = {graph_key.canonical_hash(seed)}
+def walk(seed: Chem.Mol, max_depth: int) -> list[set[str]]:
+    """Hashes newly reached at each depth, the way reachable._enumerate counts them."""
+    seen = {graph_key.canonical_hash(graph_key.normalize(seed))}
     frontier = [seed]
-    for depth in (1, 2):
-        next_frontier = []
+    levels = []
+    for _ in range(max_depth):
+        reached, next_frontier = set(), []
         for mol in frontier:
-            for candidate in environment.valid_actions(mol, CFG):
+            for candidate in environment.valid_actions(mol, LIBRARY):
                 key = graph_key.canonical_hash(candidate)
                 if key not in seen:
                     seen.add(key)
+                    reached.add(key)
                     next_frontier.append(candidate)
+        levels.append(reached)
         frontier = next_frontier
-        for reached in frontier:
-            bound = reachable.edit_lower_bound(seed, reached, CFG)
-            assert bound is not None and bound <= depth
+    return levels
+
+
+def test_each_state_is_counted_at_one_depth_only():
+    levels = walk(NAMED["ethanol"], 2)
+    assert levels[0] and levels[1]
+    assert not (levels[0] & levels[1]), "a state counted at two depths inflates the ceiling"
+
+
+def test_a_deeper_walk_reaches_a_superset():
+    shallow = walk(NAMED["ethanol"], 1)
+    deep = walk(NAMED["ethanol"], 2)
+    assert shallow[0] == deep[0]
+
+
+def test_the_seed_is_never_counted_as_reached():
+    seed = NAMED["ethanol"]
+    seed_key = graph_key.canonical_hash(graph_key.normalize(seed))
+    for level in walk(seed, 2):
+        assert seed_key not in level
+
+
+def test_one_substituent_swap_is_one_edit():
+    """Toluene to anisole is a single action, not the six atom edits it used to be."""
+    reached = walk(Chem.MolFromSmiles("Cc1ccccc1"), 1)[0]
+    anisole = graph_key.canonical_hash(
+        graph_key.normalize(Chem.MolFromSmiles("COc1ccccc1"))
+    )
+    assert anisole in reached
