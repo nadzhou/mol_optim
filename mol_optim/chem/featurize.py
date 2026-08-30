@@ -16,8 +16,7 @@ from rdkit import Chem
 
 from mol_optim import config
 
-# Featurization alphabet, not the action alphabet. cfg.atom_types sizes the atom-addition
-# action space; widening this costs input width only, so it covers drug-like chemistry.
+# Featurization alphabet, not the action alphabet (cfg.atom_types sizes that).
 ATOM_TYPES = ("C", "N", "O", "F", "S", "Cl", "Br")
 HYBRIDIZATIONS = (
     Chem.HybridizationType.SP,
@@ -47,8 +46,7 @@ BOND_STEREO = (
 )
 RING_SIZES = (3, 4, 5, 6, 7)
 
-# Width of each atom field's one-hot block, in the order _atom_code emits them. The
-# bools are 2-wide blocks so that expansion is one loop over one table.
+# Width of each atom field's one-hot block, in the order _atom_code emits them.
 ATOM_BLOCKS = (
     (
         len(ATOM_TYPES) + 1,  # element
@@ -135,8 +133,6 @@ def graphs(mols: Sequence[Chem.Mol]) -> Graphs:
 
     for index, mol in enumerate(mols):
         if mol is None or mol.GetNumAtoms() == 0:
-            # The empty molecule is never a state: valid_actions(None) returns single
-            # atoms, so an episode's first move already lands on one atom.
             raise ValueError("Cannot featurize an empty molecule")
         ring_info = mol.GetRingInfo()
         for atom in mol.GetAtoms():
@@ -187,7 +183,6 @@ def _bond_code(bond: Chem.Bond) -> tuple[int, ...]:
 
 
 def _index_of(value, known: tuple) -> int:
-    # The trailing bucket is "other", which is why this cannot raise.
     return known.index(value) if value in known else len(known)
 
 

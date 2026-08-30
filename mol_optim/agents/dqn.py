@@ -45,10 +45,7 @@ def train(
 
     online_dqn = q_network.MolDQN(cfg).to(device)
     if pretrained_encoder is not None:
-        # Only the encoder. The Q head scores a reward that did not exist during
-        # pretraining, so it starts from its own initialization. load_encoder refuses a
-        # checkpoint built on another featurization or another encoder shape — the
-        # silent no-op that would otherwise leave the encoder randomly initialized.
+        # Encoder only: the Q head scores a reward that did not exist in pretraining.
         online_dqn.encoder.load_state_dict(pretrain.load_encoder(pretrained_encoder, cfg))
     target_dqn = q_network.MolDQN(cfg).to(device)
     target_dqn.load_state_dict(online_dqn.state_dict())
@@ -70,8 +67,7 @@ def train(
         epsilon = epsilon_at_episode(episode_index, cfg)
         episode = environment.reset(cfg, action_space)
         episode_losses: list[float] = []
-        # Carried across the loop: this step's next-state candidates are the next
-        # step's candidates, and featurizing them twice is a large share of a step.
+        # Carried across the loop: featurizing these twice is a large share of a step.
         candidates = featurize.graphs(episode.valid_actions)  # num_candidates graphs
 
         while True:
@@ -114,9 +110,7 @@ def train(
                         )
                     ).squeeze(-1)  # [batch]
 
-                    # The target is a max over each next state's *candidate set*, and
-                    # those sets have different sizes. Stack them all into one forward
-                    # pass, then segment-max back down to [batch].
+                    # Ragged candidate sets: one forward pass, then segment-max to [batch].
                     set_sizes = np.array(
                         [
                             candidate_set.num_graphs
@@ -146,10 +140,7 @@ def train(
                             + cfg.gamma * not_done * best_next
                         )  # [batch]
 
-                    # Mean squared error. The reference uses Huber, which flattens
-                    # the gradient once the TD error passes 1.0; with rewards in [0, 1]
-                    # that clip almost never engages anyway, and gradient clipping below
-                    # already bounds the step size.
+                    # MSE, not the reference's Huber: with rewards in [0, 1] it never clips.
                     loss = ((q_taken - q_target) ** 2).mean()
 
                     optimizer.zero_grad()

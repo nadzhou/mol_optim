@@ -77,8 +77,6 @@ def masked(
     num_atoms = len(graph_set.atom_codes)
     rows = rng.choice(num_atoms, size=max(1, round(fraction * num_atoms)), replace=False)
     batch = featurize.tensors(graph_set, 0.0, cfg)
-    # featurize.tensors builds its arrays fresh, so zeroing in place here cannot reach
-    # the caller's graph_set or any batch built from it earlier.
     batch.atom_features[rows] = 0.0
     return batch, rows
 
@@ -231,8 +229,7 @@ def load_encoder(path: Path, cfg: config.Config) -> dict[str, torch.Tensor]:
         raise FileNotFoundError(
             f"{path} is missing. Build it with: python -m mol_optim.pretrain"
         )
-    # weights_only=False: this file holds our own Config dataclasses, and it is a file
-    # this repo wrote, not one off the internet.
+    # weights_only=False: this file holds our own Config dataclasses.
     checkpoint = torch.load(path, weights_only=False)
     if checkpoint["featurization"] != featurize.signature():
         raise ValueError(
@@ -270,15 +267,11 @@ def pretrain(
             "leaves nothing to train on"
         )
 
-    # Held-out is featurized once, training per batch: 0.13 ms a molecule against a
-    # 23 ms step, and one array alive per batch instead of one per molecule.
     holdout_sets = [
         featurize.graphs(holdout_molecules[start : start + pretrain_cfg.batch_size])
         for start in range(0, len(holdout_molecules), pretrain_cfg.batch_size)
     ]
     control_sets = [with_shuffled_atoms(graph_set, rng) for graph_set in holdout_sets]
-    # 5000 molecules is 115k atoms, which pins C, N and O to a tenth of a percent;
-    # featurizing all 249k here would cost more than the first epoch.
     prior = marginal(
         featurize.graphs(train_molecules[:5000]).atom_codes,
         np.concatenate([graph_set.atom_codes for graph_set in holdout_sets]),
@@ -289,9 +282,7 @@ def pretrain(
 
     log_file = open(log_path, "w") if log_path is not None else None
     if log_file is not None:
-        # The prior repeats on every row rather than living in a header comment: it is
-        # the line every other number in the file is read against, and a plot that has
-        # to be told the baseline by hand is a plot that can be told the wrong one.
+        # The prior repeats per row: it is what every other number is read against.
         log_file.write(
             "epoch,train_loss,holdout_loss,holdout_accuracy,control_loss,"
             "control_accuracy,prior_loss,prior_accuracy\n"
@@ -302,14 +293,12 @@ def pretrain(
     control_measurements: list[Measurement] = []
     started = time.perf_counter()
 
-    # Shuffled in place, so each epoch reshuffles the last one's order.
     epoch_order = np.arange(len(train_molecules))
 
     for epoch in range(pretrain_cfg.epochs):
         rng.shuffle(epoch_order)
         batch_losses: list[float] = []
 
-        # Short final batch dropped: the mask fraction rounds off the batch's atom count.
         last_start = len(train_molecules) - pretrain_cfg.batch_size
         for start in range(0, last_start + 1, pretrain_cfg.batch_size):
             graph_set = featurize.graphs(
@@ -391,9 +380,7 @@ def run(settings: config.Settings) -> None:
         f"({result.control[-1].accuracy:.3f})  in {result.seconds:.0f}s"
     )
 
-    # The logP probe, on the run's own held-out molecules, so nothing the encoder trained
-    # on reaches it. Fit on half, score on the other half, and run the same probe on an
-    # untrained encoder for the number to beat.
+    # Fit on half the held-out molecules, score the other half; untrained is the null.
     probe_molecules = result.holdout_molecules
     half = len(probe_molecules) // 2
     torch.manual_seed(spec.cfg.seed + 1)  # a different draw from the run's own init
@@ -404,8 +391,7 @@ def run(settings: config.Settings) -> None:
     print(f"logP probe R^2  pretrained {pretrained_r2:.3f}  random init {random_r2:.3f}")
 
     if spec.checkpoint is not None:
-        # Read back what was just written: a checkpoint that does not load is the failure
-        # this step exists to rule out, and it costs a second to rule out here.
+        # A checkpoint that does not load is the failure this step exists to rule out.
         reloaded = MaskedAtomPredictor(cfg)
         reloaded.encoder.load_state_dict(load_encoder(spec.checkpoint, cfg))
         print(f"wrote {spec.checkpoint} and loaded it back")

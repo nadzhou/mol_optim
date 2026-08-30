@@ -56,8 +56,7 @@ def collect(
 
     for _ in range(ppo_cfg.rollout_episodes):
         episode = environment.reset(cfg)
-        # Values are per episode so the GAE recursion below can walk one episode
-        # backwards without stepping over the boundary into the previous one.
+        # Per episode, so the GAE recursion cannot step over an episode boundary.
         first = len(rollout)
         candidates = featurize.graphs(episode.valid_actions)
 
@@ -135,8 +134,7 @@ def update(
     old_log_probs = torch.tensor(rollout.log_probs, dtype=torch.float32)
     returns = torch.from_numpy(rollout.returns)
     advantages = torch.from_numpy(rollout.advantages)
-    # Normalized per rollout: the pIC50 reward's scale moves as the agent climbs, and an
-    # unnormalized advantage makes the step size move with it.
+    # Normalized per rollout: the reward's scale moves as the agent climbs.
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
     policy_losses, value_losses, entropies = [], [], []
@@ -160,8 +158,7 @@ def update(
                 )
             )  # [total_candidates]
             log_probs = policy.segment_log_softmax(logits, owner, len(rows))
-            # Where each step's set begins in the concatenated block, so the chosen
-            # candidate's row is offset + choice.
+            # Where each step's set begins, so the chosen row is offset + choice.
             offsets = np.concatenate([[0], np.cumsum(set_sizes)[:-1]])
             taken = torch.from_numpy(
                 offsets + np.array([rollout.choices[i] for i in rows])
@@ -245,8 +242,7 @@ def train(
 
         for reward, mol in zip(episode_rewards, episode_molecules):
             if log_file is not None:
-                # epsilon has no meaning here; the column carries entropy instead, which
-                # is what PPO explores with.
+                # epsilon has no meaning here; the column carries entropy.
                 log_file.write(
                     f"{len(all_rewards)},{reward:.6f},{value_loss:.6f},"
                     f"{entropy:.4f},{graph_key.canonical_hash(mol)}\n"
@@ -287,8 +283,7 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
     reward_fn = lambda mol: rewards.score(reward, mol) / rewards.PIC50_SCALE
     init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
     if init_mol is None:
-        # The value head reads a state graph, and there is no graph before the first atom
-        # exists. DQN scores candidates only, so it does not have this problem.
+        # The value head needs a state graph; there is none before the first atom.
         raise ValueError(
             f"agent {spec.name!r} is PPO and needs seed_molecule: the empty state has no "
             "graph to value."

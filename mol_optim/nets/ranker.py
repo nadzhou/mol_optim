@@ -109,9 +109,7 @@ def train_one(
     optimizer = torch.optim.Adam(model.parameters(), lr=ranker_cfg.learning_rate)
     rng = np.random.default_rng(seed)
 
-    # Every within-series pair, once, as (molecule a, molecule b, y_a - y_b). Enumerated
-    # up front rather than sampled per epoch so an epoch is a fixed pass over fixed data
-    # and two runs at one seed are the same run.
+    # Enumerated up front, not sampled per epoch, so one seed is one run.
     left, right, target = [], [], []
     for group in train_series:
         for i in range(len(group)):
@@ -137,8 +135,7 @@ def train_one(
             0, len(order) - ranker_cfg.batch_size + 1, ranker_cfg.batch_size
         ):
             rows = order[start : start + ranker_cfg.batch_size]
-            # Both sides in one graph batch: the a's then the b's, so one forward pass
-            # covers the pair and the encoder sees each molecule the same way.
+            # Both sides in one batch: the a's then the b's.
             batch = featurize.tensors(
                 featurize.graphs([left[i] for i in rows] + [right[i] for i in rows]),
                 0.0,
@@ -183,10 +180,8 @@ def run(settings: config.Settings) -> None:
     )
     test_series = series_of(test_compounds, spec.cfg.min_series_size)
 
-    # Validation holds out whole *series*, not a scaffold slice of the compounds. A
-    # 15 per cent split of compounds leaves each validation scaffold with one or two
-    # members, none of them a series — which silently gave zero validation series, a
-    # NaN every epoch, and a checkpoint of the untrained weights.
+    # Whole series, not a slice of compounds: slicing gave zero validation series,
+    # a NaN every epoch, and a checkpoint of untrained weights.
     series = series_of(train_compounds, spec.cfg.min_series_size)
     cut = max(1, round(0.15 * len(series)))
     validation_series, train_series = series[:cut], series[cut:]
@@ -225,9 +220,7 @@ def run(settings: config.Settings) -> None:
     rho = within_series_spearman(
         [score(models, mols, cfg) for mols in test_mols], test_labels
     )
-    # The seeds' own series, named one by one. These are held out of training entirely,
-    # and they are the series the RL reward has to rank — the +0.23 the regressor scored
-    # on seed 0's analogs is what this line is compared against.
+    # Held out entirely: these are the series the RL reward has to rank.
     by_scaffold = splits.by_scaffold(compounds)
     seed_rhos = []
     for index, chosen in enumerate(chosen_seeds):
