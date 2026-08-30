@@ -1,23 +1,13 @@
-"""Masked-atom pretraining on ZINC.
-
-Two failure modes here produce a beautiful loss curve and a worthless encoder, and
-nothing else in the suite notices either one. A mask the head can see through makes the
-task free. A checkpoint that does not load, or loads against a featurization whose
-columns have moved, makes the pretraining a no-op that looks exactly like a hard
-research problem. The first four tests and the checkpoint tests are those two.
-
-The learning tests train, so they are slow: a run is the only way to see a loss fall.
-"""
-
 import numpy as np
 import pytest
 import torch
+
+from rdkit import Chem
 
 from mol_optim import config
 from mol_optim.chem import featurize
 from mol_optim.datasets import zinc
 from mol_optim.nets import pretrain
-from mol_optim.env import environment
 from tests import conftest
 
 CFG = config.Config()
@@ -53,7 +43,7 @@ def test_the_head_cannot_see_the_masked_atom():
     # the task is free.
     torch.manual_seed(0)
     model = pretrain.MaskedAtomPredictor(CFG)
-    single_atoms = environment.valid_actions(None, CFG)  # one molecule per cfg.atom_types
+    single_atoms = [Chem.MolFromSmiles(s) for s in ("C", "O", "N")]
     assert len(single_atoms) > 1
 
     logits = [

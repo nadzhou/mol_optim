@@ -1,12 +1,3 @@
-"""The pIC50 regressor as the RL reward, with guardrails.
-
-An agent optimizing a surrogate finds its mistakes. Three guardrails fire in order: zero
-the reward below `domain_floor` Tanimoto to the training set, subtract `pessimism` times
-the ensemble spread, clip at the most potent training compound. The regressor's own
-evaluation measured the domain as the thing with evidence behind it (MAE 1.15 at Tanimoto
-0.41 against 0.65 at 0.94) and disagreement as nearly flat (0.08).
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -22,9 +13,7 @@ from mol_optim.nets import regressor
 
 MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
-# The agents divide `score` by this to land in [0, 1], where the published learning
-# rate and the MSE loss were tuned. Zero stays zero, so the applicability-domain
-# filter still reads as "nothing".
+# Agents divide `score` by this to land in [0, 1]. Zero stays zero.
 PIC50_SCALE = 10.0
 
 
@@ -41,11 +30,11 @@ class Reward:
 def load(
     checkpoint_path: Path,
     dataset_path: Path,
-    domain_floor: float = 0.3,
+    domain_floor: float = 0.45,
     pessimism: float = 0.5,
 ) -> Reward:
-    # domain_floor 0.3 sits below the least-similar test decile (0.41), so it zeroes only
-    # molecules further out than anything the reported MAE describes.
+    # 0.45 sits under seed 0's least similar target (0.490) and over everything a
+    # PPO run at 0.3 preferred (0.30-0.40).
     if not checkpoint_path.exists():
         raise FileNotFoundError(
             f"{checkpoint_path} is missing. Run the 'regressor' step first."
@@ -76,7 +65,6 @@ def load(
 
 
 def nearest_training_similarity(reward: Reward, mol: Chem.Mol) -> float:
-    """Tanimoto to the closest compound the regressor was fitted on."""
     return max(
         DataStructs.BulkTanimotoSimilarity(
             MORGAN.GetFingerprint(mol), list(reward.train_fingerprints)

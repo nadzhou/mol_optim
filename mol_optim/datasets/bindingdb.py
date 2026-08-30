@@ -1,18 +1,3 @@
-"""BindingDB's IC50 table down to the dataset the regressor trains on, and back in.
-
-`run` downloads a dated snapshot (593 MB) unless it is there, checks the MD5 BindingDB
-publishes beside it, streams the 9 GB table once, and writes the SDF that `load` reads.
-Four cleaning decisions, each silent if skipped:
-
-- One construct, not one UniProt id (see config.BindingDBSpec).
-- Qualified values go. 5,720 of EGFR's 29,193 IC50 rows are ">" or "<" — the assay ran
-  off its range. Kept as bare numbers they pile up at round values and get learned.
-- nM to pIC50. The unit conversion lives in `to_pic50` rather than inline because nM
-  against uM shifts every label by a constant, and that trains a regressor which looks
-  fine on its own test set and ranks nothing correctly.
-- Duplicates median-aggregated by stereo-aware key, with the spread kept as a property.
-"""
-
 import hashlib
 import io
 import math
@@ -37,7 +22,6 @@ class Compound:
     pic50: float
     num_measurements: int  # how many BindingDB rows the median was taken over
     pic50_spread: float  # max - min across those rows; 0.0 for a single measurement
-    # Carried, not recomputed: the split and the leakage tests ask for it repeatedly.
     scaffold: str
 
 
@@ -49,8 +33,7 @@ def to_pic50(ic50_nm: float) -> float:
 
 
 def median(values: list[float]) -> float:
-    # Median, not mean: duplicates are the same compound measured in different labs, and
-    # the disagreements reach 8 logs. One bad row should move the label by nothing.
+    # Median, not mean: lab-to-lab disagreements reach 8 logs.
     ordered = sorted(values)
     middle = len(ordered) // 2
     if len(ordered) % 2 == 1:
@@ -112,7 +95,6 @@ def run(settings: config.Settings) -> None:
                 continue
             if fields[TARGET_NAME].strip() != spec.construct:
                 continue
-            # A multi-chain entry is a complex; the IC50 belongs to the complex.
             if fields[NUM_CHAINS].strip() not in ("1", ""):
                 continue
             target_rows += 1
@@ -134,7 +116,7 @@ def run(settings: config.Settings) -> None:
             if mol is None or mol.GetNumAtoms() == 0:
                 unreadable += 1
                 continue
-            # Salts: the measurement is the largest fragment's, not "compound + HCl".
+            # The measurement is the largest fragment's, not "compound + HCl".
             fragments = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=True)
             mol = max(fragments, key=lambda fragment: fragment.GetNumHeavyAtoms())
 
@@ -163,9 +145,8 @@ def run(settings: config.Settings) -> None:
             },
         )
 
-    # Written, then read back with every key recomputed: a handful of macrocycles change
-    # name in transit because their geometry does not survive being drawn in 2D. They are
-    # dropped rather than left to make "the same compound is in both splits" untrue.
+    # Read back with keys recomputed: a few macrocycles change name in transit and
+    # are dropped, or they would land in both splits.
     keys = list(measurements)
     write(keys)
     from_disk = molio.read_named(spec.path)

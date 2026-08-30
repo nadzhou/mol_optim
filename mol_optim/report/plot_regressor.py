@@ -1,12 +1,3 @@
-"""What the regressor got right, and where it knows it is guessing. Reading, not training.
-
-Four panels: predicted against measured with the RL seeds marked, calibration by decile,
-and the two guardrails the reward is built on — ensemble disagreement against actual
-error, and nearest-neighbour Tanimoto against the same error. Either guardrail coming out flat
-means it is decoration. The calibration panel is the one that says what the reward can
-and cannot express.
-"""
-
 import matplotlib
 import numpy as np
 import torch
@@ -35,8 +26,7 @@ def run(settings: config.Settings, spec: config.PlotSpec) -> None:
 
     compounds = bindingdb.load(settings.bindingdb.path)
     train_keys = set(checkpoint["train_keys"])
-    # Rebuilt from the same rule, then checked against the keys the run recorded: a plot
-    # of the wrong test set is a plot of training data, and it would look better.
+    # Checked against the keys the run recorded: the wrong test set plots as training data.
     train_compounds, test_compounds = splits.scaffold_split(
         compounds,
         checkpoint["regressor_config"].test_fraction,
@@ -64,8 +54,7 @@ def run(settings: config.Settings, spec: config.PlotSpec) -> None:
         f"{len(test_compounds)} held-out compounds, MAE {error.mean():.2f}, "
         f"Spearman {regressor.spearman(prediction.mean, measured):.2f}"
     )
-    # The molecules the RL run starts from. The reward has to be able to say something
-    # sensible about these before it can pay an agent for improving on them.
+    # The molecules the RL run starts from.
     chosen_seeds = seeds.choose(compounds)
     seed_predicted = regressor.predict(models, [s.mol for s in chosen_seeds], cfg).mean
     scatter_axes.scatter(
@@ -90,9 +79,7 @@ def run(settings: config.Settings, spec: config.PlotSpec) -> None:
     scatter_axes.legend(loc="upper left", fontsize=9)
     scatter_axes.grid(alpha=0.25)
 
-    # Calibration: mean prediction against mean measurement, by decile of measurement. A
-    # slope under 1 is the model pulling everything toward the middle of its training
-    # data, which is what caps the reward an agent can ever be paid.
+    # Calibration by decile. A slope under 1 caps the reward an agent can be paid.
     measured_order = np.argsort(measured)
     measured_deciles = np.array_split(measured_order, 10)
     decile_measured = [measured[part].mean() for part in measured_deciles]
@@ -110,7 +97,6 @@ def run(settings: config.Settings, spec: config.PlotSpec) -> None:
     calibration_axes.legend(loc="upper left", fontsize=9)
     calibration_axes.grid(alpha=0.25)
 
-    # Deciles of the ensemble's disagreement, against the error in each.
     order = np.argsort(prediction.spread)
     deciles = np.array_split(order, 10)
     spread_axes.plot(
@@ -124,8 +110,6 @@ def run(settings: config.Settings, spec: config.PlotSpec) -> None:
     spread_axes.set_title(f"disagreement vs error: rank correlation {spread_correlation:.2f}")
     spread_axes.grid(alpha=0.25)
 
-    # Scaffold-split, so nothing here is a duplicate; does the remaining distance predict
-    # the error?
     train_fingerprints = [MORGAN.GetFingerprint(c.mol) for c in train_compounds]
     nearest = np.array(
         [

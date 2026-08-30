@@ -1,9 +1,3 @@
-"""What a run returns, and the drawing of its best molecules.
-
-Plain data, shared by every agent. `top_k` lives here rather than in a reporting module
-because it is part of what a training run produces, not analysis done afterwards.
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +31,6 @@ class Run:
 
 
 def top_k(run: Run, out_stem: Path, k: int = 12) -> None:
-    """Writes the k best distinct molecules of a run as `<stem>.png` and `<stem>.sdf`."""
     ranked = sorted(
         range(len(run.episode_rewards)), key=lambda i: -run.episode_rewards[i]
     )

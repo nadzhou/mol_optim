@@ -1,5 +1,3 @@
-"""The state encoder's input: codes in the buffer, one-hot at the network."""
-
 import numpy as np
 from rdkit import Chem
 

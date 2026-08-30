@@ -1,5 +1,3 @@
-"""Seeding. Nothing measured downstream is trustworthy without this."""
-
 import os
 import random
 

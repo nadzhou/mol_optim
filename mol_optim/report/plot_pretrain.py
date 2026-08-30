@@ -1,12 +1,4 @@
-"""Curves from a ZINC pretraining log. Reading, not training.
-
-Its own module rather than a flag on plot_run.py: the two logs share no columns.
-Reference lines are read out of the log, not passed in — a baseline typed into the config
-file is a baseline that can be typed wrong.
-"""
-
 import csv
-from pathlib import Path
 
 import matplotlib
 

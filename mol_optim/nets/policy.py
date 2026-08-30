@@ -1,13 +1,3 @@
-"""PPO's network and the one primitive a variable action set needs.
-
-The MDP hands the agent a candidate set that changes size every step, so there is no
-fixed-size action head to softmax over. The policy scores each candidate to a logit and
-normalizes *within* that step's set — a segment softmax over a ragged block, the same
-shape problem `replay_buffer.py` solves for the DQN target's segment max.
-
-Same encoder as `q_network.py`, so one ZINC checkpoint still initializes both.
-"""
-
 import torch
 import torch.nn as nn
 

@@ -1,11 +1,3 @@
-"""PPO on the molecule MDP — rollout, advantage, clipped update, flat and in order.
-
-The point of comparison. DQN and PPO run the same environment, reward and encoder, so a
-difference between what they build is a property of the algorithm and a similarity is a
-property of the reward surface. A higher reward curve on its own is not evidence of
-anything.
-"""
-
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -16,15 +8,14 @@ import torch
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import featurize, graph_key, seeds
+from mol_optim.chem import featurize, fragments, graph_key, seeds
 from mol_optim.nets import policy, pretrain
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, rewards
 from mol_optim.report import results
 
 
 class Rollout:
-    """One batch of episodes, flattened to steps. Plain lists; the update reads them."""
-
     def __init__(self) -> None:
         self.candidates: list[featurize.Graphs] = []  # the set offered at each step
         self.states: list[featurize.Graphs] = []  # the state the step was taken from
@@ -48,16 +39,15 @@ def collect(
     ppo_cfg: config.PPOConfig,
     reward_fn: Callable[[Chem.Mol], float],
     rng: np.random.Generator,
+    library: tuple[fragments.Fragment, ...],
 ) -> tuple[Rollout, list[float], list[Chem.Mol]]:
-    """Run `rollout_episodes` episodes under the current policy, storing every step."""
     rollout = Rollout()
     episode_rewards: list[float] = []
     episode_molecules: list[Chem.Mol] = []
 
     for _ in range(ppo_cfg.rollout_episodes):
-        episode = environment.reset(cfg)
-        # Values are per episode so the GAE recursion below can walk one episode
-        # backwards without stepping over the boundary into the previous one.
+        episode = environment.reset(cfg, library)
+        # Per episode, so the GAE recursion cannot step over an episode boundary.
         first = len(rollout)
         candidates = featurize.graphs(episode.valid_actions)
 
@@ -77,7 +67,7 @@ def collect(
                     )[0]
                 )
 
-            result = environment.step(episode, choice, reward_fn, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg, library)
 
             rollout.candidates.append(candidates)
             rollout.states.append(state_graphs)
@@ -131,12 +121,10 @@ def update(
     ppo_cfg: config.PPOConfig,
     rng: np.random.Generator,
 ) -> tuple[float, float, float]:
-    """Clipped surrogate over the rollout. Returns (policy loss, value loss, entropy)."""
     old_log_probs = torch.tensor(rollout.log_probs, dtype=torch.float32)
     returns = torch.from_numpy(rollout.returns)
     advantages = torch.from_numpy(rollout.advantages)
-    # Normalized per rollout: the pIC50 reward's scale moves as the agent climbs, and an
-    # unnormalized advantage makes the step size move with it.
+    # Normalized per rollout: the reward's scale moves as the agent climbs.
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
     policy_losses, value_losses, entropies = [], [], []
@@ -160,8 +148,7 @@ def update(
                 )
             )  # [total_candidates]
             log_probs = policy.segment_log_softmax(logits, owner, len(rows))
-            # Where each step's set begins in the concatenated block, so the chosen
-            # candidate's row is offset + choice.
+            # Where each step's set begins, so the chosen row is offset + choice.
             offsets = np.concatenate([[0], np.cumsum(set_sizes)[:-1]])
             taken = torch.from_numpy(
                 offsets + np.array([rollout.choices[i] for i in rows])
@@ -212,6 +199,7 @@ def train(
     cfg: config.Config,
     ppo_cfg: config.PPOConfig,
     reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
     num_updates: int,
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
@@ -237,7 +225,7 @@ def train(
 
     for update_index in range(num_updates):
         rollout, episode_rewards, episode_molecules = collect(
-            network, cfg, ppo_cfg, reward_fn, rng
+            network, cfg, ppo_cfg, reward_fn, rng, library
         )
         policy_loss, value_loss, entropy = update(
             network, optimizer, rollout, cfg, ppo_cfg, rng
@@ -245,8 +233,7 @@ def train(
 
         for reward, mol in zip(episode_rewards, episode_molecules):
             if log_file is not None:
-                # epsilon has no meaning here; the column carries entropy instead, which
-                # is what PPO explores with.
+                # epsilon has no meaning here; the column carries entropy.
                 log_file.write(
                     f"{len(all_rewards)},{reward:.6f},{value_loss:.6f},"
                     f"{entropy:.4f},{graph_key.canonical_hash(mol)}\n"
@@ -287,8 +274,7 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
     reward_fn = lambda mol: rewards.score(reward, mol) / rewards.PIC50_SCALE
     init_mol = seeds.molecule(settings.bindingdb.path, spec.seed_molecule)
     if init_mol is None:
-        # The value head reads a state graph, and there is no graph before the first atom
-        # exists. DQN scores candidates only, so it does not have this problem.
+        # The value head needs a state graph; there is none before the first atom.
         raise ValueError(
             f"agent {spec.name!r} is PPO and needs seed_molecule: the empty state has no "
             "graph to value."
@@ -297,10 +283,16 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
         f"starting from seed {spec.seed_molecule}: "
         f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
     )
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
+
     return train(
         replace(spec.cfg, init_mol=init_mol),
         spec.ppo,
         reward_fn,
+        library,
         num_updates=spec.ppo.num_updates,
         log_path=settings.runs / f"{spec.name}.csv",
         checkpoint_path=settings.runs / f"{spec.name}.pt",

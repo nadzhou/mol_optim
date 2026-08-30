@@ -1,9 +1,3 @@
-"""Every knob, as frozen dataclasses built from a TOML file. Never a global config bag.
-
-`load` is the only thing that reads the file; everything downstream is passed a
-dataclass explicitly. A value used in exactly one place is a literal at that place.
-"""
-
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -13,31 +7,18 @@ from typing import Any, get_args, get_origin
 
 @dataclass(frozen=True)
 class Config:
-    # Defaults follow Google's configs/bootstrap_dqn.json, not MolDQN-pytorch/hyp.py.
-    # The PyTorch port deviates on gamma, ring sizes, buffer size, update interval and
-    # gradient clipping, and reproduces a visibly worse reward curve because of it.
+    # Defaults follow Google's bootstrap_dqn.json, not MolDQN-pytorch/hyp.py.
     seed: int = 0
 
     init_mol: str | None = None
-    atom_types: tuple[str, ...] = ("C", "O", "N")
-    allow_removal: bool = True
-    allow_no_modification: bool = True
-    allow_bonds_between_rings: bool = False
-    # 3- and 4-rings are strained and rarely make it into a real compound; the published
-    # config leaves them out.
-    allowed_ring_sizes: tuple[int, ...] = (5, 6)
     max_steps_per_episode: int = 40
-    # Only the terminal molecule counts, so an intermediate reward is discounted by
-    # discount_factor ** steps_remaining. Separate from gamma below.
+    # Separate from gamma: this discounts by steps remaining in the episode.
     discount_factor: float = 0.9
 
-    # The published MolDQN numbers were tuned against a 2049 -> 1024 -> 512 -> 128 -> 32
-    # -> 1 MLP over a Morgan fingerprint: 2.7M parameters against this network's 56k.
     hidden_dim: int = 64
     num_message_passing_layers: int = 3
 
-    # gamma is 1.0 because the environment already discounts by steps remaining; a second
-    # discount here would charge the agent twice for taking its time.
+    # 1.0: the environment already discounts by steps remaining.
     gamma: float = 1.0
     learning_rate: float = 1e-4
     grad_clip_norm: float = 10.0
@@ -47,7 +28,6 @@ class Config:
     update_interval: int = 4  # gradient steps per environment step, published: every 4
     updates_per_interval: int = 1
 
-    # Piecewise linear: start -> mid at half the run -> end at the end.
     epsilon_start: float = 1.0
     epsilon_mid: float = 0.1
     epsilon_end: float = 0.01
@@ -57,17 +37,14 @@ class Config:
 
 @dataclass(frozen=True)
 class PretrainConfig:
-    # The encoder's shape stays in Config, so the pretrained encoder, the RL encoder and
-    # the regressor are built from one set of numbers and one checkpoint loads into all
-    # three. A hidden_dim here too would drift.
+    # Encoder shape stays in Config so one checkpoint loads into all three users.
     seed: int = 0
     num_molecules: int | None = None  # None means every molecule in the file
     num_holdout: int = 5000
     mask_fraction: float = 0.15  # Hu et al. 2020
     epochs: int = 10
     batch_size: int = 128
-    # 1e-3, not the DQN's 1e-4: supervised training with a fixed target, not a moving Q
-    # target that a large step can push away from itself.
+    # 1e-3, not the DQN's 1e-4: fixed target, not a moving Q target.
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
 
@@ -80,26 +57,34 @@ class RegressorConfig:
     batch_size: int = 128
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
-    # Five networks, different seeds, same data. The mean is the prediction; the spread is
-    # what the reward subtracts to stay pessimistic where the model is guessing.
+    # Mean is the prediction; the spread is what the reward subtracts.
     ensemble_size: int = 5
+
+
+@dataclass(frozen=True)
+class RankerConfig:
+    seed: int = 0
+    test_fraction: float = 0.2
+    epochs: int = 60
+    batch_size: int = 64  # pairs, so 128 molecules a step
+    learning_rate: float = 1e-3
+    grad_clip_norm: float = 10.0
+    ensemble_size: int = 5
+    min_series_size: int = 4
+    max_pairs: int = 200_000
 
 
 @dataclass(frozen=True)
 class PPOConfig:
     seed: int = 0
-    # Short episodes (6 edits on pIC50) make a single episode far too small a batch to
-    # estimate an advantage from.
     rollout_episodes: int = 16
     update_epochs: int = 4
     minibatch_steps: int = 32
     clip_epsilon: float = 0.2
     gae_lambda: float = 0.95
     value_coefficient: float = 0.5
-    # The candidate set is large and the policy is a softmax over it, so collapse is the
-    # failure mode. Small, but not zero.
+    # Collapse is the failure mode here. Small, but not zero.
     entropy_coefficient: float = 0.01
-    # 3e-4, not the DQN's 1e-4: PPO's clipped objective bounds its own step size.
     learning_rate: float = 3e-4
     grad_clip_norm: float = 10.0
     num_updates: int = 60
@@ -121,8 +106,8 @@ class BindingDBSpec:
     table: str = "BindingDB_All.tsv"
     path: Path = Path("data/egfr_ic50.sdf")
     uniprot: str = "P00533"
-    # One construct, not one UniProt id: P00533 covers 51 EGFR constructs, and pooling
-    # wild type with T790M puts one compound's two very different numbers under one label.
+    # One construct, not one UniProt id: pooling wild type with T790M merges two
+    # very different numbers for one compound.
     construct: str = "Epidermal growth factor receptor"
 
 
@@ -139,6 +124,14 @@ class RegressorSpec:
     cfg: RegressorConfig = RegressorConfig()
     checkpoint: Path | None = None
     pretrained_encoder: Path | None = None  # omitted means random init, the null
+    report_every: int = 0
+
+
+@dataclass(frozen=True)
+class RankerSpec:
+    cfg: RankerConfig = RankerConfig()
+    checkpoint: Path | None = None
+    pretrained_encoder: Path | None = None
     report_every: int = 0
 
 
@@ -162,6 +155,28 @@ class AuditSpec:
 
 
 @dataclass(frozen=True)
+class RecoverySpec:
+    logs: tuple[Path, ...] = ()
+    seed_molecule: int | None = None
+
+
+@dataclass(frozen=True)
+class SubsetSpec:
+    source: Path = Path("data/egfr_ic50.sdf")
+    path: Path = Path("data/egfr_chno.sdf")
+    # H is listed because implicit hydrogens never appear as atoms.
+    elements: tuple[str, ...] = ("C", "H", "N", "O")
+
+
+@dataclass(frozen=True)
+class ReachableSpec:
+    seed_molecule: int | None = None  # index into seeds.choose()
+    # The frontier grows about 40-fold a level: 3 is seconds, 5 is tens of minutes.
+    max_depth: int = 3
+    cfg: Config = Config()
+
+
+@dataclass(frozen=True)
 class PlotSpec:
     kind: str = "run"  # a key of cli.PLOTS
     out: Path = Path("results/plot.png")
@@ -180,8 +195,12 @@ class Settings:
     bindingdb: BindingDBSpec
     pretrain: PretrainSpec
     regressor: RegressorSpec
+    ranker: RankerSpec
     agents: tuple[AgentSpec, ...]
     audit: AuditSpec
+    recovery: RecoverySpec
+    reachable: ReachableSpec
+    subset: SubsetSpec
     plots: tuple[PlotSpec, ...]
 
 
@@ -236,19 +255,30 @@ def load(path: Path) -> Settings:
 
     agents = []
     ppo_names = {field.name for field in fields(PPOConfig)}
+    config_names = {field.name for field in fields(Config)}
     for agent_table in table.pop("agents", []):
         mine, rest = _split(agent_table, AgentSpec)
+        # Shared keys go to both: sending them to PPOConfig alone made `seed = 1`
+        # on a DQN a silent no-op.
+        unknown = sorted(set(rest) - config_names - ppo_names)
+        if unknown:
+            raise ValueError(
+                f"agent {agent_table.get('name', '?')!r} sets {', '.join(unknown)}, "
+                f"which is not a field of AgentSpec, Config or PPOConfig"
+            )
         agents.append(
             build(
                 AgentSpec,
                 mine,
-                cfg=build(Config, {k: v for k, v in rest.items() if k not in ppo_names}),
+                cfg=build(Config, {k: v for k, v in rest.items() if k in config_names}),
                 ppo=build(PPOConfig, {k: v for k, v in rest.items() if k in ppo_names}),
             )
         )
 
+    reachable_spec, reachable_cfg = _split(table.pop("reachable", {}), ReachableSpec)
     pretrain_spec, pretrain_cfg = _split(table.pop("pretrain", {}), PretrainSpec)
     regressor_spec, regressor_cfg = _split(table.pop("regressor", {}), RegressorSpec)
+    ranker_spec, ranker_cfg = _split(table.pop("ranker", {}), RankerSpec)
 
     steps = tuple(table.pop("steps", ()))
     runs = Path(table.pop("runs", "runs"))
@@ -263,8 +293,12 @@ def load(path: Path) -> Settings:
         regressor=build(
             RegressorSpec, regressor_spec, cfg=build(RegressorConfig, regressor_cfg)
         ),
+        ranker=build(RankerSpec, ranker_spec, cfg=build(RankerConfig, ranker_cfg)),
         agents=tuple(agents),
         audit=build(AuditSpec, table.pop("audit", {})),
+        recovery=build(RecoverySpec, table.pop("recovery", {})),
+        reachable=build(ReachableSpec, reachable_spec, cfg=build(Config, reachable_cfg)),
+        subset=build(SubsetSpec, table.pop("subset", {})),
         plots=tuple(build(PlotSpec, plot) for plot in table.pop("plots", [])),
     )
     if table:

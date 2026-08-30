@@ -1,5 +1,3 @@
-"""The Q network: the GNN encoder plus a head that also reads the graph-level features."""
-
 import torch
 import torch.nn as nn
 

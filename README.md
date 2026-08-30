@@ -25,18 +25,27 @@ pointing the agent at it is an edit to that file, not a subclass.
 
 ## The result
 
-| Reward | Agent | Random |
-|---|---:|---:|
-| EGFR pIC50 | 0.859 | 0.331 |
+| Reward | Agent | Random | Seed, untouched |
+|---|---:|---:|---:|
+| EGFR pIC50, 3 edits | 0.761 | 0.331 | 0.738 |
+| EGFR pIC50, 6 edits | 0.745 | 0.331 | 0.738 |
 
-Both on the same scale, predicted pIC50 divided by 10. Pretraining on ZINC improves the
-regressor's test MAE from 0.868 to 0.806, and the GNN encoder carries 56k parameters
-against the published fingerprint MLP's 2.7M.
+All on the same scale, predicted pIC50 divided by 10. The agent beats random by a wide
+margin and the untouched seed by almost nothing, which is the first thing worth noticing.
+
+Pretraining on ZINC improves the regressor's test MAE from 0.868 to 0.806, and the GNN
+encoder carries 56k parameters against the published fingerprint MLP's 2.7M.
 
 **The finding worth your time is that the agent games whatever it is scored on.** Against
-the fitted pIC50 regressor it found a molecule scoring 9.95 that looks entirely plausible,
-and only a substructure audit shows every one of its top molecules carries a
-nitrogen–nitrogen bond.
+the fitted pIC50 regressor it builds molecules the model scores above 9, and only a
+substructure audit shows that 11 of its top 12 carry a nitrogen–nitrogen bond.
+
+The measurement that says how much of that is the reward model's fault is the positive
+control: the same agent rewarded by *measured* pIC50 through a lookup, where there is
+nothing fitted to game. Of the 565 measured compounds on the seed's scaffold — all held
+out of the regressor's training set — the fitted reward rediscovers 8 and the honest
+reward 12. Perfect knowledge of the answer is worth 2.1% recovery against 1.4%. Most of
+what is missing is not the reward model.
 
 A reward curve that climbs is not evidence of lead optimization. It is evidence that the
 loop optimizes its reward. Telling those apart is what this repo is for, and
@@ -48,7 +57,7 @@ loop optimizes its reward. Telling those apart is what this repo is for, and
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -m "not slow"   # 104 tests, about 14 seconds
+pytest -m "not slow"   # 108 tests, about 14 seconds
 ```
 
 Then the whole pipeline, from download to figures — one command, one config file:
@@ -73,6 +82,7 @@ timings, and what is worth changing.
 - [mol_optim/](mol_optim/README.md) — what each module is, and where to start reading
 - [configs/config.toml](configs/config.toml) — the pipeline, as data
 - [docs/running.md](docs/running.md) — what each step does, and what to change
+- [docs/where_this_stands.md](docs/where_this_stands.md) — what works, what does not, what to try next
 - [results/](results/README.md) — the figures and the numbers
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how commits work here, and the size budget
 

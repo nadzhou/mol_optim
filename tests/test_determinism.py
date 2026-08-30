@@ -1,11 +1,16 @@
-"""Seeding. Every measurement in this repo is untrustworthy without it."""
+from rdkit import Chem
 
 from mol_optim import config
-from mol_optim.chem import graph_key
+from mol_optim.chem import fragments, graph_key
 from mol_optim.env import environment
 from mol_optim.agents import dqn, random_walk
 from tests import molecules
 from tests.molecules import NAMED
+
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O", "*c1ccccc1", "*N(C)C")
+)
 
 SMALL = config.Config(
     init_mol=NAMED["ethanol"],
@@ -22,13 +27,13 @@ def hashes(run) -> tuple[str, ...]:
 
 
 def test_dqn_run_is_bitwise_reproducible():
-    first, second = dqn.train(SMALL, molecules.size_reward), dqn.train(SMALL, molecules.size_reward)
+    first, second = dqn.train(SMALL, molecules.size_reward, LIBRARY), dqn.train(SMALL, molecules.size_reward, LIBRARY)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
 
 def test_random_rollout_is_bitwise_reproducible():
-    first, second = random_walk.rollout(SMALL, molecules.size_reward), random_walk.rollout(SMALL, molecules.size_reward)
+    first, second = random_walk.rollout(SMALL, molecules.size_reward, LIBRARY), random_walk.rollout(SMALL, molecules.size_reward, LIBRARY)
     assert first.episode_rewards == second.episode_rewards
     assert hashes(first) == hashes(second)
 
@@ -39,8 +44,8 @@ def test_different_seeds_give_different_runs():
     seeded = config.Config(
         init_mol=NAMED["ethanol"], episodes=3, max_steps_per_episode=4, seed=1
     )
-    assert hashes(random_walk.rollout(SMALL, molecules.size_reward)) != hashes(
-        random_walk.rollout(seeded, molecules.size_reward)
+    assert hashes(random_walk.rollout(SMALL, molecules.size_reward, LIBRARY)) != hashes(
+        random_walk.rollout(seeded, molecules.size_reward, LIBRARY)
     )
 
 
@@ -50,10 +55,10 @@ def test_candidate_order_is_stable_across_calls():
     cfg = config.Config(init_mol=NAMED["aspirin"])
     first = [
         graph_key.canonical_hash(mol)
-        for mol in environment.valid_actions(cfg.init_mol, cfg)
+        for mol in environment.valid_actions(cfg.init_mol, LIBRARY)
     ]
     second = [
         graph_key.canonical_hash(mol)
-        for mol in environment.valid_actions(cfg.init_mol, cfg)
+        for mol in environment.valid_actions(cfg.init_mol, LIBRARY)
     ]
     assert first == second == sorted(first)

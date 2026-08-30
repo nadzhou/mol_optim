@@ -1,5 +1,3 @@
-"""SDF in and out — the only place a graph turns into bytes."""
-
 from rdkit import Chem
 from rdkit.Chem import AllChem
 

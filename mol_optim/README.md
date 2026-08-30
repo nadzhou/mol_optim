@@ -56,6 +56,7 @@ import that points backwards up that list is a bug you can see in the import lin
 | `environment.py` | candidate enumeration by RWMol edits and fragment attachment, `step` |
 | `replay_buffer.py` | ours; ragged, because the target is a max over a candidate set |
 | `rewards.py` | the reward: the pIC50 regressor, behind three guardrails |
+| `measured.py` | the control's reward: measured pIC50 by lookup, zero for the unmeasured |
 
 ## `agents/`
 
@@ -63,6 +64,7 @@ import that points backwards up that list is a bug you can see in the import lin
 |---|---|
 | `dqn.py` | the training loop, flat |
 | `ppo.py` | the same MDP under PPO — the algorithm arm of the comparison |
+| `dqn_measured.py` | the same loop against measured pIC50 — what search finds when the reward is honest |
 | `random_walk.py` | tier 0 of the ladder — the number DQN has to beat |
 
 ## `report/` — looking at the output
@@ -71,6 +73,8 @@ import that points backwards up that list is a bug you can see in the import lin
 |---|---|
 | `results.py` | what a run returns, and its top-k as a drawing and an SDF |
 | `audit.py` | what the agent built: motif counts and whether the scaffold survived |
+| `recovery.py` | the primary metric: how many real held-out analogs of the seed a run built |
+| `reachable.py` | the ceiling that metric is measured against: how many analogs the action space can build at all |
 | `plot_run.py` | reward and loss curves from a run log |
 | `plot_pretrain.py` | loss and accuracy curves from a pretraining log |
 | `plot_regressor.py` | predicted against measured, and whether disagreement predicts error |

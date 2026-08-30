@@ -1,5 +1,3 @@
-"""The state key. Everything downstream trusts that one graph has one name."""
-
 import pytest
 from rdkit import Chem
 

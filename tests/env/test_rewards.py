@@ -1,12 +1,10 @@
-"""The reward's guardrails."""
-
 from pathlib import Path
 
 import pytest
 from rdkit import Chem
 
 from mol_optim.chem import seeds, splits
-from mol_optim.datasets import bindingdb, zinc
+from mol_optim.datasets import zinc
 from mol_optim.nets import regressor
 from mol_optim.env import rewards
 from tests import conftest

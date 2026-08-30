@@ -1,10 +1,3 @@
-"""The GNN encoder and the Q network on top of it.
-
-Three of these catch bugs that train perfectly well and give the wrong answer:
-permutation invariance, batch-vs-single agreement, and steps remaining reaching the
-head.
-"""
-
 import time
 
 import numpy as np
@@ -13,10 +6,15 @@ import torch
 from rdkit import Chem
 
 from mol_optim import config
-from mol_optim.chem import featurize, graph_key
+from mol_optim.chem import featurize, fragments, graph_key
 from mol_optim.nets import q_network
 from mol_optim.env import environment
 from tests.molecules import NAMED
+
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O", "*c1ccccc1", "*N(C)C")
+)
 
 CFG = config.Config()
 RAGGED = (NAMED["methane"], NAMED["aspirin"], NAMED["ethanol"], NAMED["caffeine"])
@@ -85,7 +83,7 @@ def test_step_latency_under_budget():
     # step: every candidate is featurized and scored at every step of every episode.
     model = network()
     mol = NAMED["caffeine"]
-    candidates = environment.valid_actions(mol, CFG)
+    candidates = environment.valid_actions(mol, LIBRARY)
     timings = []
     for _ in range(20):
         started = time.perf_counter()

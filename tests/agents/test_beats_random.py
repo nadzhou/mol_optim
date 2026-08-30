@@ -1,23 +1,20 @@
-"""The gate: DQN has to beat random on predicted pIC50, and hold the level it reached.
-
-Slow — two 1000-episode runs against a five-model ensemble. `pytest -m "not slow"` skips
-them; the nightly run does not. Both need the regressor checkpoint the pipeline's
-`regressor` step writes, so they skip on a fresh checkout rather than erroring.
-
-The random baseline is the real test here: a DQN that ties random is broken, and a
-mediocre-but-rising reward curve looks like progress with nothing to compare it to.
-"""
-
 from dataclasses import replace
 
 import pytest
 
+from rdkit import Chem
+
 from mol_optim import config
-from mol_optim.chem import seeds
+from mol_optim.chem import fragments, seeds
 from mol_optim.env import rewards
 from mol_optim.agents import dqn, random_walk
 from mol_optim.report import results
 from tests import conftest
+
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O", "*c1ccccc1", "*N(C)C")
+)
 
 CHECKPOINT = config.RegressorSpec().checkpoint or config.AgentSpec().regressor
 # 6 edits, not 40: past that the run leaves the regressor's applicability domain.

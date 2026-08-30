@@ -1,11 +1,3 @@
-"""The scaffold split and the leakage it exists to prevent.
-
-BindingDB duplicates compounds across assays and fills up with series of close analogs
-around one frame. Both leak through a random split, and both produce a test score that
-is beautiful and describes nothing. These run on the real dataset, on every rebuild of
-it, because that is where the leak would appear.
-"""
-
 import pytest
 
 from mol_optim import config

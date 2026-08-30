@@ -1,21 +1,20 @@
-"""PPO's ragged-action-set primitive, and that a short run trains and repeats.
-
-The candidate set changes size every step, so the policy normalizes within a segment of
-a concatenated block rather than over a fixed action head. That segment softmax is the
-one piece with no equivalent in the DQN path, so it is checked against torch's dense
-log_softmax on each segment taken on its own.
-"""
-
 import numpy as np
 import pytest
 import torch
 
+from rdkit import Chem
+
+from mol_optim.chem import fragments
 from mol_optim import config
 from mol_optim.nets import policy
-from mol_optim.env import environment
 from mol_optim.agents import ppo
 
 from tests import molecules
+
+LIBRARY = tuple(
+    fragments.Fragment(mol=Chem.MolFromSmiles(s), smiles=s, count=1)
+    for s in ("*C", "*OC", "*O", "*c1ccccc1", "*N(C)C")
+)
 
 SET_SIZES = [1, 3, 7, 2]  # a one-candidate step is real: a single atom has few edits
 
@@ -69,7 +68,7 @@ def test_entropy_is_highest_when_every_candidate_is_equal():
 
 def tiny(seed: int = 0) -> tuple[config.Config, config.PPOConfig]:
     """A run small enough for the per-commit suite: 2 updates of 2 episodes, 3 edits."""
-    start = environment.valid_actions(None, config.Config())[0]
+    start = Chem.MolFromSmiles("CCO")
     return (
         config.Config(seed=seed, init_mol=start, max_steps_per_episode=3),
         config.PPOConfig(
@@ -80,7 +79,7 @@ def tiny(seed: int = 0) -> tuple[config.Config, config.PPOConfig]:
 
 def test_a_short_run_produces_one_molecule_per_episode():
     cfg, ppo_cfg = tiny()
-    run = ppo.train(cfg, ppo_cfg, molecules.size_reward, num_updates=2)
+    run = ppo.train(cfg, ppo_cfg, molecules.size_reward, LIBRARY, num_updates=2)
 
     assert len(run.episode_rewards) == 2 * ppo_cfg.rollout_episodes
     assert len(run.episode_molecules) == len(run.episode_rewards)
@@ -90,6 +89,6 @@ def test_a_short_run_produces_one_molecule_per_episode():
 def test_the_same_seed_gives_the_same_run():
     # PPO samples its actions, so the seeding has to cover torch's generator as well as
     # numpy's. Without that this is the test that fails.
-    first = ppo.train(*tiny(), molecules.size_reward, num_updates=2)
-    second = ppo.train(*tiny(), molecules.size_reward, num_updates=2)
+    first = ppo.train(*tiny(), molecules.size_reward, LIBRARY, num_updates=2)
+    second = ppo.train(*tiny(), molecules.size_reward, LIBRARY, num_updates=2)
     assert first.episode_rewards == second.episode_rewards

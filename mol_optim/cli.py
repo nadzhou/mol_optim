@@ -1,27 +1,36 @@
-"""The one entry point: `mol-optim <config.toml>`.
-
-Everything else in the package is a library. This reads the config file, then runs the
-steps it names, in the order it names them, printing a banner before each so a long run's
-output says where it is.
-
-The three tables below are the extension points. A new agent is a module with a
-`run(settings, spec)` returning a results.Run, plus one line in AGENTS. A new plot is the
-same with a PlotSpec. A new dataset or a retrained regressor is a change to the config
-file alone.
-"""
-
+import dataclasses
+import json
+import subprocess
 import sys
 from pathlib import Path
 
+import numpy
+import rdkit
+import torch
+
 from mol_optim import config
 from mol_optim.chem import graph_key
-from mol_optim.datasets import bindingdb, zinc
-from mol_optim.nets import pretrain, regressor
-from mol_optim.agents import dqn, ppo, random_walk
-from mol_optim.report import audit, plot_pretrain, plot_regressor, plot_run, results
+from mol_optim.datasets import bindingdb, subset, zinc
+from mol_optim.nets import pretrain, ranker, regressor
+from mol_optim.agents import (
+    dqn,
+    evolutionary,
+    ppo,
+    random_walk,
+)
+from mol_optim.report import (
+    audit,
+    plot_pretrain,
+    plot_regressor,
+    plot_run,
+    reachable,
+    recovery,
+    results,
+)
 
 AGENTS = {
     "dqn": dqn.run,
+    "evolutionary": evolutionary.run,
     "ppo": ppo.run,
     "random": random_walk.run,
 }
@@ -42,6 +51,34 @@ def _agents(settings: config.Settings) -> None:
                 f"there is {', '.join(sorted(AGENTS))}"
             )
         print(f"-- {spec.name} ({spec.kind})", flush=True)
+
+        # Before the run, not after, so a run that crashes still says what it was.
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        manifest = settings.runs / f"{spec.name}.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "agent": dataclasses.asdict(spec),
+                    "bindingdb_path": str(settings.bindingdb.path),
+                    "commit": commit.stdout.strip() or "not a git checkout",
+                    "versions": {
+                        "python": sys.version.split()[0],
+                        "torch": torch.__version__,
+                        "rdkit": rdkit.__version__,
+                        "numpy": numpy.__version__,
+                    },
+                    "torch_num_threads": torch.get_num_threads(),
+                },
+                indent=2,
+                default=str,
+            )
+            + "\n"
+        )
+
         run = AGENTS[spec.kind](settings, spec)
         best_molecule, best_reward = run.best
         print(
@@ -67,10 +104,14 @@ def _plots(settings: config.Settings) -> None:
 STEPS = {
     "zinc": zinc.run,
     "bindingdb": bindingdb.run,
+    "subset": subset.run,  # the same table filtered to one element set
     "pretrain": pretrain.run,
     "regressor": regressor.run,
+    "ranker": ranker.run,  # the within-series ranking reward
     "agents": _agents,
     "audit": audit.run,
+    "reachable": reachable.run,
+    "recovery": recovery.run,
     "plots": _plots,
 }
 
@@ -81,8 +122,7 @@ def main() -> None:
     settings = config.load(Path(sys.argv[1]))
     unknown = [step for step in settings.steps if step not in STEPS]
     if unknown:
-        # Checked before anything runs, so a typo in the last step does not surface
-        # twenty minutes into the first one.
+        # Before anything runs, so a typo in the last step surfaces now.
         raise SystemExit(
             f"no step named {', '.join(unknown)}; there is {', '.join(STEPS)}"
         )

@@ -1,10 +1,3 @@
-"""DQN on the molecule MDP — the whole training step, flat and in order.
-
-Reads top to bottom: enumerate candidates, score them, act, store, update. The
-reference splits the update across a helper that loops over the batch in Python; here
-it is one batched forward pass, inline, where the shapes are visible.
-"""
-
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -15,19 +8,14 @@ import torch
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import featurize, graph_key, seeds
+from mol_optim.chem import featurize, fragments, graph_key, seeds
 from mol_optim.nets import pretrain, q_network
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, replay_buffer, rewards
 from mol_optim.report import results
 
 
 def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
-    """Piecewise linear: epsilon_start -> epsilon_mid at half the run -> epsilon_end.
-
-    The published schedule (run_dqn.py PiecewiseSchedule). The PyTorch port instead
-    multiplies epsilon by 0.99907 per episode, a schedule whose endpoint depends on how
-    many episodes you happen to run.
-    """
     halfway = cfg.episodes / 2
     if episode_index < halfway:
         return cfg.epsilon_start + (cfg.epsilon_mid - cfg.epsilon_start) * (
@@ -41,6 +29,7 @@ def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
 def train(
     cfg: config.Config,
     reward_fn: Callable[[Chem.Mol], float],
+    library: tuple[fragments.Fragment, ...],
     log_path: Path | None = None,
     checkpoint_path: Path | None = None,
     report_every: int = 0,
@@ -52,10 +41,7 @@ def train(
 
     online_dqn = q_network.MolDQN(cfg).to(device)
     if pretrained_encoder is not None:
-        # Only the encoder. The Q head scores a reward that did not exist during
-        # pretraining, so it starts from its own initialization. load_encoder refuses a
-        # checkpoint built on another featurization or another encoder shape — the
-        # silent no-op that would otherwise leave the encoder randomly initialized.
+        # Encoder only: the Q head scores a reward that did not exist in pretraining.
         online_dqn.encoder.load_state_dict(pretrain.load_encoder(pretrained_encoder, cfg))
     target_dqn = q_network.MolDQN(cfg).to(device)
     target_dqn.load_state_dict(online_dqn.state_dict())
@@ -75,10 +61,9 @@ def train(
 
     for episode_index in range(cfg.episodes):
         epsilon = epsilon_at_episode(episode_index, cfg)
-        episode = environment.reset(cfg)
+        episode = environment.reset(cfg, library)
         episode_losses: list[float] = []
-        # Carried across the loop: this step's next-state candidates are the next
-        # step's candidates, and featurizing them twice is a large share of a step.
+        # Carried across the loop: featurizing these twice is a large share of a step.
         candidates = featurize.graphs(episode.valid_actions)  # num_candidates graphs
 
         while True:
@@ -93,7 +78,7 @@ def train(
                     )  # [num_candidates, 1]
                 choice = int(torch.argmax(q_candidates))
 
-            result = environment.step(episode, choice, reward_fn, cfg)
+            result = environment.step(episode, choice, reward_fn, cfg, library)
             next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
             next_candidates = featurize.graphs(episode.valid_actions)
             buffer.push(
@@ -119,9 +104,7 @@ def train(
                         )
                     ).squeeze(-1)  # [batch]
 
-                    # The target is a max over each next state's *candidate set*, and
-                    # those sets have different sizes. Stack them all into one forward
-                    # pass, then segment-max back down to [batch].
+                    # Ragged candidate sets: one forward pass, then segment-max to [batch].
                     set_sizes = np.array(
                         [
                             candidate_set.num_graphs
@@ -151,10 +134,7 @@ def train(
                             + cfg.gamma * not_done * best_next
                         )  # [batch]
 
-                    # Mean squared error. The reference uses Huber, which flattens
-                    # the gradient once the TD error passes 1.0; with rewards in [0, 1]
-                    # that clip almost never engages anyway, and gradient clipping below
-                    # already bounds the step size.
+                    # MSE, not the reference's Huber: with rewards in [0, 1] it never clips.
                     loss = ((q_taken - q_target) ** 2).mean()
 
                     optimizer.zero_grad()
@@ -224,9 +204,15 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
             f"starting from seed {spec.seed_molecule}: "
             f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
         )
+    library = fragments.library(
+        [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+    )
+    print(f"action space: {len(library)} substituents")
+
     return train(
         replace(spec.cfg, init_mol=init_mol),
         reward_fn,
+        library,
         log_path=settings.runs / f"{spec.name}.csv",
         checkpoint_path=settings.runs / f"{spec.name}.pt",
         report_every=spec.report_every,

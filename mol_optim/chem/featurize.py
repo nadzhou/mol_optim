@@ -1,11 +1,3 @@
-"""Graph featurization: an RDKit molecule to the tensors the encoder reads.
-
-Molecules are stored as int8 codes and expanded to one-hot float32 only where a batch
-enters the network — 13 bytes an atom against 48, which is what makes a replay buffer of
-tens of thousands of candidate sets fit. Every categorical ends in an "other" bucket, so
-an atom the tables do not name lands in a real column rather than an all-zero row.
-"""
-
 import hashlib
 from dataclasses import dataclass
 from typing import Sequence
@@ -16,8 +8,7 @@ from rdkit import Chem
 
 from mol_optim import config
 
-# Featurization alphabet, not the action alphabet. cfg.atom_types sizes the atom-addition
-# action space; widening this costs input width only, so it covers drug-like chemistry.
+# Featurization alphabet: wider than any library, so it costs input width only.
 ATOM_TYPES = ("C", "N", "O", "F", "S", "Cl", "Br")
 HYBRIDIZATIONS = (
     Chem.HybridizationType.SP,
@@ -47,8 +38,7 @@ BOND_STEREO = (
 )
 RING_SIZES = (3, 4, 5, 6, 7)
 
-# Width of each atom field's one-hot block, in the order _atom_code emits them. The
-# bools are 2-wide blocks so that expansion is one loop over one table.
+# Width of each atom field's one-hot block, in the order _atom_code emits them.
 ATOM_BLOCKS = (
     (
         len(ATOM_TYPES) + 1,  # element
@@ -116,8 +106,6 @@ class Graphs:
 
 @dataclass(frozen=True)
 class Batch:
-    """What the network reads: one-hot features and the index arrays that group them."""
-
     atom_features: torch.Tensor  # [total_atoms, ATOM_FEATURE_LENGTH] float32
     bond_features: torch.Tensor  # [total_edges, BOND_FEATURE_LENGTH] float32
     edge_index: torch.Tensor  # [2, total_edges] int64
@@ -135,8 +123,6 @@ def graphs(mols: Sequence[Chem.Mol]) -> Graphs:
 
     for index, mol in enumerate(mols):
         if mol is None or mol.GetNumAtoms() == 0:
-            # The empty molecule is never a state: valid_actions(None) returns single
-            # atoms, so an episode's first move already lands on one atom.
             raise ValueError("Cannot featurize an empty molecule")
         ring_info = mol.GetRingInfo()
         for atom in mol.GetAtoms():
@@ -187,12 +173,10 @@ def _bond_code(bond: Chem.Bond) -> tuple[int, ...]:
 
 
 def _index_of(value, known: tuple) -> int:
-    # The trailing bucket is "other", which is why this cannot raise.
     return known.index(value) if value in known else len(known)
 
 
 def concatenate(sets: Sequence[Graphs]) -> Graphs:
-    """Join candidate sets into one block, shifting atom rows and graph numbers."""
     atom_offsets = np.cumsum([0] + [len(s.atom_codes) for s in sets[:-1]])
     graph_offsets = np.cumsum([0] + [s.num_graphs for s in sets[:-1]])
     return Graphs(
@@ -241,7 +225,6 @@ def tensors(
 
 
 def _one_hot(codes: np.ndarray, blocks: tuple[int, ...]) -> np.ndarray:
-    """[rows, len(blocks)] of codes -> [rows, sum(blocks)] float32, one 1 per block."""
     offsets = np.cumsum((0,) + blocks[:-1])
     dense = np.zeros((len(codes), sum(blocks)), dtype=np.float32)
     dense[np.arange(len(codes))[:, None], codes + offsets] = 1.0

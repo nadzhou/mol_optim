@@ -6,7 +6,7 @@
 # Every key below matches a field of a frozen dataclass in mol_optim/config.py; a key
 # that dataclass does not have is an error, not a setting that silently does nothing.
 
-steps = ["zinc", "bindingdb", "pretrain", "regressor", "agents", "audit", "plots"]
+steps = ["zinc", "bindingdb", "pretrain", "regressor", "agents", "audit", "recovery", "plots"]
 
 # Where the agents write their log, checkpoint and top-k.
 runs = "runs"
@@ -83,6 +83,13 @@ max_steps_per_episode = 6
 # What did the agent actually build? A reward curve does not answer that.
 [audit]
 sdf = ["runs/pilot_pic50_seed0_top.sdf"]
+seed_molecule = 0
+
+# Did the agent build molecules that exist? Every measured compound on the seed's
+# scaffold is held out of the regressor's training set, so a hit is a real analog the
+# reward model never saw. This is the metric the run is judged on; the reward curve is not.
+[recovery]
+logs = ["runs/pilot_pic50_seed0.csv"]
 seed_molecule = 0
 
 [[plots]]

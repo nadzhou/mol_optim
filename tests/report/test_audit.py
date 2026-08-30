@@ -1,11 +1,3 @@
-"""Substructure auditing of a run's molecules.
-
-`tests/fixtures/audit_motifs.sdf` was generated once, the same way molecules.sdf was,
-from: hydrazine NN, phenylhydrazine NNc1ccccc1, tetrazane_chain NNNNc1ccccc1,
-pyrazole c1cc[nH]n1, hemiaminal OC(N)c1ccccc1, aminal c1ccccc1C(N)N,
-gem_diol OC(O)c1ccccc1, n_hydroxylamine ONc1ccccc1.
-"""
-
 from pathlib import Path
 
 import pytest
