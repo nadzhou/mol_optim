@@ -86,6 +86,21 @@ class RegressorConfig:
 
 
 @dataclass(frozen=True)
+class RankerConfig:
+    seed: int = 0
+    test_fraction: float = 0.2
+    epochs: int = 60
+    batch_size: int = 64  # pairs, so 128 molecules a step
+    learning_rate: float = 1e-3
+    grad_clip_norm: float = 10.0
+    ensemble_size: int = 5
+    # A series of fewer than four compounds carries almost no ranking signal and its
+    # pairs dominate the count: most scaffolds have two or three members.
+    min_series_size: int = 4
+    max_pairs: int = 200_000
+
+
+@dataclass(frozen=True)
 class PPOConfig:
     seed: int = 0
     # Short episodes (6 edits on pIC50) make a single episode far too small a batch to
@@ -143,6 +158,14 @@ class RegressorSpec:
 
 
 @dataclass(frozen=True)
+class RankerSpec:
+    cfg: RankerConfig = RankerConfig()
+    checkpoint: Path | None = None
+    pretrained_encoder: Path | None = None
+    report_every: int = 0
+
+
+@dataclass(frozen=True)
 class AgentSpec:
     kind: str = "dqn"  # a key of cli.AGENTS
     name: str = "run"  # names the CSV, the checkpoint and the top-k under Settings.runs
@@ -168,6 +191,25 @@ class RecoverySpec:
 
 
 @dataclass(frozen=True)
+class SubsetSpec:
+    source: Path = Path("data/egfr_ic50.sdf")
+    path: Path = Path("data/egfr_chno.sdf")
+    # H is listed because RDKit's implicit hydrogens never appear as atoms; leaving it
+    # out would read as excluding them.
+    elements: tuple[str, ...] = ("C", "H", "N", "O")
+
+
+@dataclass(frozen=True)
+class ReachableSpec:
+    seed_molecule: int | None = None  # index into seeds.choose()
+    # The exact search's frontier grows about 40-fold a level: 3 is seconds, 4 is
+    # minutes, 5 is tens of minutes. The composition bound is printed to max_depth too
+    # and costs nothing, so a run past the exact search's reach still says something.
+    max_depth: int = 3
+    cfg: Config = Config()  # the action space being measured
+
+
+@dataclass(frozen=True)
 class PlotSpec:
     kind: str = "run"  # a key of cli.PLOTS
     out: Path = Path("results/plot.png")
@@ -186,9 +228,12 @@ class Settings:
     bindingdb: BindingDBSpec
     pretrain: PretrainSpec
     regressor: RegressorSpec
+    ranker: RankerSpec
     agents: tuple[AgentSpec, ...]
     audit: AuditSpec
     recovery: RecoverySpec
+    reachable: ReachableSpec
+    subset: SubsetSpec
     plots: tuple[PlotSpec, ...]
 
 
@@ -243,19 +288,32 @@ def load(path: Path) -> Settings:
 
     agents = []
     ppo_names = {field.name for field in fields(PPOConfig)}
+    config_names = {field.name for field in fields(Config)}
     for agent_table in table.pop("agents", []):
         mine, rest = _split(agent_table, AgentSpec)
+        # seed, learning_rate and grad_clip_norm are fields of both, and a flat agent
+        # table means them for whichever loop the `kind` names, so they go to both.
+        # Sending every shared key to PPOConfig alone made `seed = 1` on a DQN a silent
+        # no-op: the run read Config's default and three "different" seeds were one run.
+        unknown = sorted(set(rest) - config_names - ppo_names)
+        if unknown:
+            raise ValueError(
+                f"agent {agent_table.get('name', '?')!r} sets {', '.join(unknown)}, "
+                f"which is not a field of AgentSpec, Config or PPOConfig"
+            )
         agents.append(
             build(
                 AgentSpec,
                 mine,
-                cfg=build(Config, {k: v for k, v in rest.items() if k not in ppo_names}),
+                cfg=build(Config, {k: v for k, v in rest.items() if k in config_names}),
                 ppo=build(PPOConfig, {k: v for k, v in rest.items() if k in ppo_names}),
             )
         )
 
+    reachable_spec, reachable_cfg = _split(table.pop("reachable", {}), ReachableSpec)
     pretrain_spec, pretrain_cfg = _split(table.pop("pretrain", {}), PretrainSpec)
     regressor_spec, regressor_cfg = _split(table.pop("regressor", {}), RegressorSpec)
+    ranker_spec, ranker_cfg = _split(table.pop("ranker", {}), RankerSpec)
 
     steps = tuple(table.pop("steps", ()))
     runs = Path(table.pop("runs", "runs"))
@@ -270,9 +328,12 @@ def load(path: Path) -> Settings:
         regressor=build(
             RegressorSpec, regressor_spec, cfg=build(RegressorConfig, regressor_cfg)
         ),
+        ranker=build(RankerSpec, ranker_spec, cfg=build(RankerConfig, ranker_cfg)),
         agents=tuple(agents),
         audit=build(AuditSpec, table.pop("audit", {})),
         recovery=build(RecoverySpec, table.pop("recovery", {})),
+        reachable=build(ReachableSpec, reachable_spec, cfg=build(Config, reachable_cfg)),
+        subset=build(SubsetSpec, table.pop("subset", {})),
         plots=tuple(build(PlotSpec, plot) for plot in table.pop("plots", [])),
     )
     if table:

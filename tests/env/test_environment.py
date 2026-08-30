@@ -108,3 +108,27 @@ def test_empty_start_offers_one_atom_of_each_type():
     assert len(actions) == 3
     assert {mol.GetAtomWithIdx(0).GetSymbol() for mol in actions} == {"C", "O", "N"}
     assert all(mol.GetNumAtoms() == 1 for mol in actions)
+
+
+def test_a_high_valence_atom_type_does_not_break_the_bond_orders():
+    """Sulfur's maximum valence is 6, but the deepest bond is a triple.
+
+    The bond-order loop used to be bounded by the largest valence in atom_types, so a
+    methane state with S in the alphabet indexed past SINGLE/DOUBLE/TRIPLE and raised.
+    Nothing caught it because the default alphabet is C, O, N, whose maximum is 4.
+    """
+    cfg = config.Config(atom_types=("C", "O", "N", "F", "Cl", "S", "Br"))
+    assert_action_set_is_sane(environment.valid_actions(NAMED["ethanol"], cfg))
+    assert_action_set_is_sane(environment.valid_actions(Chem.MolFromSmiles("C"), cfg))
+
+
+def test_widening_atom_types_only_adds_candidates():
+    """The C/O/N candidates have to survive verbatim, or the recorded runs stop meaning
+    anything: a wider alphabet is a superset of the narrower one, not a different set."""
+    narrow = config.Config(atom_types=("C", "O", "N"))
+    wide = config.Config(atom_types=("C", "O", "N", "F", "Cl", "S", "Br"))
+    keys = lambda cfg: {
+        graph_key.canonical_hash(mol)
+        for mol in environment.valid_actions(NAMED["aspirin"], cfg)
+    }
+    assert keys(narrow) < keys(wide)

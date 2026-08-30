@@ -59,13 +59,6 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
         element: max(periodic_table.GetValenceList(element))
         for element in cfg.atom_types
     }
-    # atoms_with_free_valence[order] = atoms that can accept a new bond of that order.
-    atoms_with_free_valence = {
-        order: [
-            atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumImplicitHs() >= order
-        ]
-        for order in range(1, max(max_bonds.values()))
-    }
     # Index i of this list is the bond of order i; index 0 (None) means "no bond", which
     # makes the bond order arithmetic below a plain list lookup.
     bond_orders = [
@@ -74,6 +67,15 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
         Chem.BondType.DOUBLE,
         Chem.BondType.TRIPLE,
     ]
+    # atoms_with_free_valence[order] = atoms that can accept a new bond of that order.
+    # Bounded by the bond orders that exist, not by the largest valence in atom_types:
+    # sulfur's is 6, and a methane state then asks for bond_orders[4].
+    atoms_with_free_valence = {
+        order: [
+            atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumImplicitHs() >= order
+        ]
+        for order in range(1, len(bond_orders))
+    }
 
     candidates: list[Chem.Mol] = []
 

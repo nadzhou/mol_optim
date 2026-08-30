@@ -32,6 +32,7 @@ Each name in `steps` maps to one entry in `mol_optim/cli.py`'s `STEPS` table.
 | `agents` | the regressor and encoder checkpoints | one CSV, checkpoint, top-k and manifest per `[[agents]]` table | 2–5 min each |
 | `audit` | the SDFs named in `[audit]` | its counts, to stdout | seconds |
 | `recovery` | the run CSVs named in `[recovery]` | how many real held-out analogs the run built, to stdout | seconds |
+| `reachable` | `data/egfr_ic50.sdf` and the action space in `[reachable]` | how many of those analogs the action space can build at all, to stdout | seconds at depth 3, minutes at 4 |
 | `plots` | whatever each `[[plots]]` table names | a PNG each, under `results/` | seconds |
 
 Both downloads are pinned by checksum, so a silently changed upstream file fails loudly
@@ -104,6 +105,14 @@ forced out of the regressor's training set, so a run that builds one has built a
 analog its reward model never saw. It prints how many, and how many of those are active
 (pIC50 >= 8) and potent (>= 9). Seed 0 has 565 such analogs, 163 active, 36 potent.
 
+`reachable` is the denominator that number should be read against, and it needs no run
+at all — `mol-optim configs/reachable.toml`. It enumerates the action space from the seed
+and reports how many of the 565 analogs are reachable within k edits. For seed 0 under
+the default `atom_types = ["C", "O", "N"]`, 380 of the 565 are unreachable at any depth
+because they carry a fluorine, chlorine, sulfur, phosphorus or iodine that no edit can
+introduce, and only 25 are within 3 edits. Change `atom_types` in that file and run it
+again to measure a different action space.
+
 `audit` says what the molecules are: it counts the substructures past runs have gone
 wrong in — hemiaminals, N-hydroxyls, chains of catenated nitrogen — and checks that the
 seed's scaffold survived. The `agents` step has already written each run's best distinct
@@ -112,7 +121,7 @@ molecules as a drawing and an SDF.
 ## Tests
 
 ```bash
-pytest -m "not slow"   # 108 tests, about 14 seconds
+pytest -m "not slow"   # 117 tests, about 19 seconds
 pytest                 # adds two 1000-episode pIC50 runs and a pretraining run
 ```
 

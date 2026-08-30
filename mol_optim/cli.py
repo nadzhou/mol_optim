@@ -22,14 +22,22 @@ import torch
 
 from mol_optim import config
 from mol_optim.chem import graph_key
-from mol_optim.datasets import bindingdb, zinc
-from mol_optim.nets import pretrain, regressor
-from mol_optim.agents import dqn, dqn_measured, ppo, random_walk
+from mol_optim.datasets import bindingdb, subset, zinc
+from mol_optim.nets import pretrain, ranker, regressor
+from mol_optim.agents import (
+    dqn,
+    dqn_measured,
+    evolutionary,
+    evolutionary_measured,
+    ppo,
+    random_walk,
+)
 from mol_optim.report import (
     audit,
     plot_pretrain,
     plot_regressor,
     plot_run,
+    reachable,
     recovery,
     results,
 )
@@ -37,6 +45,9 @@ from mol_optim.report import (
 AGENTS = {
     "dqn": dqn.run,
     "dqn_measured": dqn_measured.run,  # the positive control: measured pIC50, not a model
+    # The search-strength baseline: same action space, same budget, no learning.
+    "evolutionary": evolutionary.run,
+    "evolutionary_measured": evolutionary_measured.run,
     "ppo": ppo.run,
     "random": random_walk.run,
 }
@@ -113,10 +124,13 @@ def _plots(settings: config.Settings) -> None:
 STEPS = {
     "zinc": zinc.run,
     "bindingdb": bindingdb.run,
+    "subset": subset.run,  # the same table filtered to one element set
     "pretrain": pretrain.run,
     "regressor": regressor.run,
+    "ranker": ranker.run,  # the within-series ranking reward
     "agents": _agents,
     "audit": audit.run,
+    "reachable": reachable.run,
     "recovery": recovery.run,
     "plots": _plots,
 }
