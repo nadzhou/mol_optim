@@ -1,5 +1,3 @@
-"""Discount arithmetic. An off-by-one here reweights all training."""
-
 import pytest
 
 from rdkit import Chem

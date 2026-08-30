@@ -1,15 +1,3 @@
-"""The one entry point: `mol-optim <config.toml>`.
-
-Everything else in the package is a library. This reads the config file, then runs the
-steps it names, in the order it names them, printing a banner before each so a long run's
-output says where it is.
-
-The three tables below are the extension points. A new agent is a module with a
-`run(settings, spec)` returning a results.Run, plus one line in AGENTS. A new plot is the
-same with a PlotSpec. A new dataset or a retrained regressor is a change to the config
-file alone.
-"""
-
 import dataclasses
 import json
 import subprocess

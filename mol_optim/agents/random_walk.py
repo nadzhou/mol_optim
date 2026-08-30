@@ -1,12 +1,5 @@
-"""Tier 0 of the algorithm ladder: uniform random over the candidate set.
-
-The number every other agent has to beat. A reward curve that looks like progress but
-ties this is a broken agent, and nothing else in the test suite catches that.
-"""
-
 import time
 from dataclasses import replace
-from pathlib import Path
 from typing import Callable
 
 import numpy as np

@@ -1,9 +1,3 @@
-"""AttrMask pretraining on ZINC: mask atoms, name them from the graph around them.
-
-One checkpoint initializes both the RL encoder and the pIC50 regressor. The mask is an
-all-zero feature row: it carries nothing and does not widen the input.
-"""
-
 import dataclasses
 import time
 from pathlib import Path
@@ -256,7 +250,6 @@ def pretrain(
     checkpoint_path: Path | None = None,
     report_every: int = 0,
 ) -> Result:
-    """Trains MaskedAtomPredictor on ZINC and returns every number the run produced."""
     determinism.seed_everything(pretrain_cfg.seed)
     rng = np.random.default_rng(pretrain_cfg.seed)
 

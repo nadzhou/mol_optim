@@ -1,11 +1,3 @@
-"""Loading a config file: the keys that silently went nowhere.
-
-`Config` and `PPOConfig` both have a `seed`, a `learning_rate` and a `grad_clip_norm`.
-An agent table is flat, so one `seed = 1` in it has to reach whichever loop `kind` names
-— and it used to reach PPOConfig only, which made three "different" seeds on a DQN one
-run repeated three times.
-"""
-
 import pytest
 
 from mol_optim import config

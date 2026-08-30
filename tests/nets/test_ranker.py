@@ -1,16 +1,7 @@
-"""The ranker's two structural properties, and the metric it is judged on.
-
-Antisymmetry is by construction, not by training: the model scores a molecule and the
-prediction is a difference, so nothing has to teach it that a beats b exactly as much as
-b loses to a. The metric is a median over series, because one correlation over pooled
-compounds is the credit the regressor was already getting for separating scaffolds.
-"""
-
 import numpy as np
 import torch
 
 from mol_optim import config
-from mol_optim.chem import featurize
 from mol_optim.nets import ranker
 from tests.molecules import START_MOLECULES
 

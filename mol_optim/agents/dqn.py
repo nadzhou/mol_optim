@@ -1,5 +1,3 @@
-"""DQN on the molecule MDP: enumerate candidates, score, act, store, update."""
-
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -18,8 +16,6 @@ from mol_optim.report import results
 
 
 def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
-    """Piecewise linear: epsilon_start -> epsilon_mid at half the run -> epsilon_end.
-    """
     halfway = cfg.episodes / 2
     if episode_index < halfway:
         return cfg.epsilon_start + (cfg.epsilon_mid - cfg.epsilon_start) * (

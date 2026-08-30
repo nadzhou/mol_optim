@@ -1,15 +1,4 @@
-"""A within-series ranker: what a substitution does to potency, not absolute potency.
-
-Scores one molecule; the loss is on the difference between two of the same series:
-
-    loss = ((s(a) - s(b)) - (y_a - y_b)) ** 2
-
-So the score is antisymmetric by construction, and the RL loop can read s(mol) directly
-as a reward. Only within-series pairs are used.
-"""
-
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 

@@ -1,11 +1,3 @@
-"""PPO on the molecule MDP — rollout, advantage, clipped update, flat and in order.
-
-The point of comparison. DQN and PPO run the same environment, reward and encoder, so a
-difference between what they build is a property of the algorithm and a similarity is a
-property of the reward surface. A higher reward curve on its own is not evidence of
-anything.
-"""
-
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -24,8 +16,6 @@ from mol_optim.report import results
 
 
 class Rollout:
-    """One batch of episodes, flattened to steps. Plain lists; the update reads them."""
-
     def __init__(self) -> None:
         self.candidates: list[featurize.Graphs] = []  # the set offered at each step
         self.states: list[featurize.Graphs] = []  # the state the step was taken from
@@ -51,7 +41,6 @@ def collect(
     rng: np.random.Generator,
     library: tuple[fragments.Fragment, ...],
 ) -> tuple[Rollout, list[float], list[Chem.Mol]]:
-    """Run `rollout_episodes` episodes under the current policy, storing every step."""
     rollout = Rollout()
     episode_rewards: list[float] = []
     episode_molecules: list[Chem.Mol] = []
@@ -132,7 +121,6 @@ def update(
     ppo_cfg: config.PPOConfig,
     rng: np.random.Generator,
 ) -> tuple[float, float, float]:
-    """Clipped surrogate over the rollout. Returns (policy loss, value loss, entropy)."""
     old_log_probs = torch.tensor(rollout.log_probs, dtype=torch.float32)
     returns = torch.from_numpy(rollout.returns)
     advantages = torch.from_numpy(rollout.advantages)

@@ -1,11 +1,3 @@
-"""The baseline's one load-bearing property: it stays inside the DQN's reachable set.
-
-If an individual can drift further than max_steps_per_episode edits from the seed, the
-comparison is between two different search spaces and says nothing about search strength.
-Budget parity is the other half — the same number of reward evaluations as the DQN, or
-the gap is a budget difference wearing an algorithm's name.
-"""
-
 from dataclasses import replace
 
 from rdkit import Chem

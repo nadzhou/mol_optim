@@ -1,10 +1,3 @@
-"""The GNN encoder and the Q network on top of it.
-
-Three of these catch bugs that train perfectly well and give the wrong answer:
-permutation invariance, batch-vs-single agreement, and steps remaining reaching the
-head.
-"""
-
 import time
 
 import numpy as np

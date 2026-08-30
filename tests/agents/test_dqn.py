@@ -1,5 +1,3 @@
-"""The DQN update: exploration schedule, target network, and the batched max."""
-
 import numpy as np
 import pytest
 import torch

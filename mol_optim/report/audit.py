@@ -1,15 +1,3 @@
-"""What did the agent actually build? Substructure counts over a run's molecules.
-
-Every run so far has ended the same way: a reward curve that climbs, and a top-k of
-molecules no chemist would order. The descriptor scorers found hemiaminals, the pIC50
-regressor found chains of catenated nitrogen, and those were found by looking at a
-drawing after the earlier motif list came back empty. So the list is a record of what
-has been found, not a guarantee of what is there — when a new run scores well, look at
-the picture too.
-
-Pure: a molecule in, counts out. Nothing here reads a file or holds state.
-"""
-
 from dataclasses import dataclass
 
 from rdkit import Chem

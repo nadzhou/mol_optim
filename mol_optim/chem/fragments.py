@@ -1,9 +1,3 @@
-"""Substituent-level edits. The median held-out target is 6 atom edits from the seed but
-differs by one connected group, so the substituent is the action, not the atom.
-
-The library is mined from the measured set, so every action attaches something real.
-"""
-
 from collections import Counter
 from dataclasses import dataclass
 from typing import Sequence

@@ -1,9 +1,3 @@
-"""Molecules to and from files. The only place a graph turns into bytes.
-
-SDF, not SMILES: an SDF record is an atom table plus a bond table, which is the graph
-written down, not a linear re-encoding of it that has to be parsed back.
-"""
-
 from pathlib import Path
 
 from rdkit import Chem
@@ -24,7 +18,6 @@ def read_named(path: Path) -> dict[str, Chem.Mol]:
 
 
 def write(path: Path, molecules: tuple[Chem.Mol, ...], properties: dict[str, list]) -> None:
-    """One column of `properties` per molecule, alongside the structures."""
     writer = Chem.SDWriter(str(path))
     for index, mol in enumerate(molecules):
         record = Chem.Mol(mol)

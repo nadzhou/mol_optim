@@ -1,18 +1,3 @@
-"""BindingDB's IC50 table down to the dataset the regressor trains on, and back in.
-
-`run` downloads a dated snapshot (593 MB) unless it is there, checks the MD5 BindingDB
-publishes beside it, streams the 9 GB table once, and writes the SDF that `load` reads.
-Four cleaning decisions, each silent if skipped:
-
-- One construct, not one UniProt id (see config.BindingDBSpec).
-- Qualified values go. 5,720 of EGFR's 29,193 IC50 rows are ">" or "<" — the assay ran
-  off its range. Kept as bare numbers they pile up at round values and get learned.
-- nM to pIC50. The unit conversion lives in `to_pic50` rather than inline because nM
-  against uM shifts every label by a constant, and that trains a regressor which looks
-  fine on its own test set and ranks nothing correctly.
-- Duplicates median-aggregated by stereo-aware key, with the spread kept as a property.
-"""
-
 import hashlib
 import io
 import math

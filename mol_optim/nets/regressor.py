@@ -1,16 +1,3 @@
-"""The pIC50 regressor: the shared encoder plus a head, an ensemble of them, and the
-training that writes the checkpoint.
-
-This is what the RL reward reads. Two deliberate choices in the network. The head sees
-the pooled embedding only — unlike the DQN's, it never reads size, or the agent would be
-handed "add atoms, collect reward" as a direction. And the prediction is an ensemble
-mean carrying its spread, which is largest where the data is thinnest.
-
-`run` splits three ways, not two: the training half is scaffold-split again for
-validation, which picks the epoch to stop at. Picking it by watching the test set is the
-oldest way to report a number that does not survive new data.
-"""
-
 import time
 from dataclasses import dataclass
 from pathlib import Path

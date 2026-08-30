@@ -1,10 +1,3 @@
-"""The rolling mean every published reward curve is drawn with.
-
-It is a cumsum with two index arithmetic steps, which is the kind of code that is off by
-one and still produces a smooth, plausible line. Every figure in results/ passes through
-it, so the tests are against means computed the slow, obvious way.
-"""
-
 import numpy as np
 import pytest
 

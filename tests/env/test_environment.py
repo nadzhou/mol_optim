@@ -1,10 +1,3 @@
-"""Environment invariants.
-
-The action space is the foundation: if it emits an invalid graph, everything downstream
-is garbage, and nothing crashes when it does. Random *action sequences* are where the
-bugs are, so the fuzz test walks whole episodes.
-"""
-
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st

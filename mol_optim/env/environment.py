@@ -1,8 +1,3 @@
-"""The molecule MDP: substituent-level graph edits.
-
-Identity comes from graph_key.canonical_hash, off the graph, never a SMILES round-trip.
-"""
-
 from dataclasses import dataclass
 from typing import Callable
 
@@ -85,7 +80,6 @@ def step(
     cfg: config.Config,
     library: tuple[fragments.Fragment, ...],
 ) -> Result:
-    """Moves to the candidate at `action_index` and scores the graph it lands on."""
     if episode.num_steps_taken >= cfg.max_steps_per_episode:
         raise ValueError("This episode is terminated.")
     if not 0 <= action_index < len(episode.valid_actions):

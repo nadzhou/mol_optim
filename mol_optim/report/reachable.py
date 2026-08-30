@@ -1,9 +1,3 @@
-"""How many held-out analogs the action space can reach, before any agent runs.
-
-Breadth-first over environment.valid_actions: exact, so it is the number an agent at
-that budget is measured against. No training, no reward, no network.
-"""
-
 import time
 
 from rdkit import Chem

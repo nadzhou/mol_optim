@@ -1,13 +1,3 @@
-"""The gate: DQN has to beat random on predicted pIC50, and hold the level it reached.
-
-Slow — two 1000-episode runs against a five-model ensemble. `pytest -m "not slow"` skips
-them; the nightly run does not. Both need the regressor checkpoint the pipeline's
-`regressor` step writes, so they skip on a fresh checkout rather than erroring.
-
-The random baseline is the real test here: a DQN that ties random is broken, and a
-mediocre-but-rising reward curve looks like progress with nothing to compare it to.
-"""
-
 from dataclasses import replace
 
 import pytest

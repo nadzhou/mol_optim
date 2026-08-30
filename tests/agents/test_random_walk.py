@@ -1,11 +1,3 @@
-"""Tier 0: the uniform-random rollout the DQN's number is measured against.
-
-The baseline is the reference the whole result rests on, so a broken one is worse than
-no baseline: a random rollout that quietly stops after one edit reports a floor far
-below the real one and makes any agent look like it learned. These are fast — 40-odd
-episodes on ethanol with a size reward, no network.
-"""
-
 import pytest
 
 from rdkit import Chem

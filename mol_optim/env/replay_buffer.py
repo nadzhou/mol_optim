@@ -1,15 +1,3 @@
-"""Our own replay buffer — the OpenAI baselines one is TF1-era and does not install.
-
-One transition is: the chosen candidate's graph, the steps remaining when it was
-chosen, the reward, every candidate available from the resulting state, and done. The
-next-state field is a *set* of candidates because the target is a max over next
-candidates, not over a fixed action head — that is the MolDQN formulation, and it is
-why this buffer is ragged.
-
-Graphs are stored as featurize.Graphs, i.e. int8 codes, not one-hot floats. A 5000
-transition buffer holds roughly 200k candidate graphs; the codes make that tens of MB.
-"""
-
 from dataclasses import dataclass
 
 import numpy as np

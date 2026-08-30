@@ -1,11 +1,3 @@
-"""The pIC50 regressor.
-
-The overfit test is the one to keep: it takes seconds and it fails loudly for every
-broken forward pass, dead gradient and mis-shaped label there is. The random-label
-control is the one that catches a leaking split, which no amount of staring at a test
-MAE will do.
-"""
-
 import dataclasses
 
 import numpy as np

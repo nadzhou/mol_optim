@@ -1,5 +1,3 @@
-"""Our replay buffer, so it carries its own tests."""
-
 import numpy as np
 
 from mol_optim.chem import featurize

@@ -1,10 +1,3 @@
-"""What a run reports about itself.
-
-Both properties here are read straight into the paper's table, and both are quiet when
-wrong: a tail taken from the wrong end reports the exploration phase as the result, and
-an argmax that returns the index instead of the molecule fails much later, in a drawing.
-"""
-
 import pytest
 
 from mol_optim.chem import molio

@@ -1,11 +1,3 @@
-"""PPO's ragged-action-set primitive, and that a short run trains and repeats.
-
-The candidate set changes size every step, so the policy normalizes within a segment of
-a concatenated block rather than over a fixed action head. That segment softmax is the
-one piece with no equivalent in the DQN path, so it is checked against torch's dense
-log_softmax on each segment taken on its own.
-"""
-
 import numpy as np
 import pytest
 import torch
@@ -15,7 +7,6 @@ from rdkit import Chem
 from mol_optim.chem import fragments
 from mol_optim import config
 from mol_optim.nets import policy
-from mol_optim.env import environment
 from mol_optim.agents import ppo
 
 from tests import molecules

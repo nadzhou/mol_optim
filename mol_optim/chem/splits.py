@@ -1,11 +1,3 @@
-"""Splitting the EGFR dataset by scaffold.
-
-BindingDB is full of series — one paper, forty analogs of one frame — so a random split
-asks "have I seen this molecule's cousin" and answers beautifully. Whole scaffolds fall
-on one side here, largest groups to training, which leaves the test set made of frames
-with the least support. Seed scaffolds are held out of training on top of that.
-"""
-
 from collections import defaultdict
 from typing import Sequence
 
@@ -15,7 +7,6 @@ from mol_optim.datasets import bindingdb
 def by_scaffold(
     compounds: Sequence[bindingdb.Compound],
 ) -> dict[str, list[bindingdb.Compound]]:
-    """Grouped by scaffold key, largest group first."""
     groups: dict[str, list[bindingdb.Compound]] = defaultdict(list)
     for compound in compounds:
         groups[compound.scaffold].append(compound)

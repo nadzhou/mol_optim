@@ -1,13 +1,3 @@
-"""The molecules the RL run starts from.
-
-Distinct chemotypes rather than the top-k most potent, because the top-k of an EGFR set
-are forty analogs of one quinazoline. Largest active scaffold clusters first: a series
-with forty measured analogs is one a chemist has already walked around.
-
-Used twice — as the RL episodes' starting molecules, and as the scaffolds held out of
-the regressor's training set. Both, or the regressor knows the answer where it starts.
-"""
-
 from pathlib import Path
 from typing import Sequence
 
@@ -68,7 +58,6 @@ def held_out_scaffolds(seeds: Sequence[bindingdb.Compound]) -> frozenset[str]:
 
 
 def molecule(dataset_path: Path, index: int | None) -> Chem.Mol | None:
-    """The `index`-th chosen seed's graph, or None. What `seed_molecule` in the config is."""
     if index is None:
         return None
     return choose(bindingdb.load(dataset_path))[index].mol

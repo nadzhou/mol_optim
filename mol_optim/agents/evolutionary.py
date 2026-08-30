@@ -1,18 +1,3 @@
-"""Evolutionary search on the same action space — the search-strength baseline.
-
-Same MDP, same candidate sets, same edit budget and the same number of reward
-evaluations as dqn.py. The only thing that changes is what picks the next molecule: a
-population under truncation selection instead of a Q network. A gap between this and the
-DQN is therefore the value of learning with the action space held fixed, which is the
-question docs/where_this_stands.md is left with after the halogen run took the ceiling up
-and the catch down.
-
-An individual is the *path* from the seed, not the molecule it ends on. That is what keeps
-the search inside the DQN's reachable set: every individual is exactly
-max_steps_per_episode edits from the seed, and a mutation re-rolls a suffix of the path
-rather than editing the endpoint, which would wander further out every generation.
-"""
-
 import time
 from dataclasses import replace
 from pathlib import Path

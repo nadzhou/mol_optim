@@ -1,16 +1,3 @@
-"""A canonical name for a molecular graph, computed from the graph.
-
-RDKit's canonical atom ranking, the per-atom properties in that order, and the bond list
-rewritten in terms of the ranks. 14 us against 19.5 us to write a canonical SMILES, and no
-re-parse on the other side — which is where aromaticity gets re-perceived and one molecule
-picks up two names.
-
-Two keys, because real inhibitors brought stereochemistry in. `canonical_hash` is
-constitutional and is the RL loop's name for a state; `stereo_hash` separates
-stereoisomers, which the BindingDB dataset needs, since two enantiomers there carry two
-different measured IC50 values.
-"""
-
 import hashlib
 
 from rdkit import Chem

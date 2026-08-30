@@ -1,9 +1,3 @@
-"""The ceiling: how many held-out analogs the action space can build at all.
-
-Every recovery number is a fraction of this, so the enumeration has to be exact — no
-duplicates, no state counted at a depth it cannot be reached in.
-"""
-
 from rdkit import Chem
 
 from mol_optim.chem import fragments, graph_key

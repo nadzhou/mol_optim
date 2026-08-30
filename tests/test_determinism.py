@@ -1,5 +1,3 @@
-"""Seeding. Every measurement in this repo is untrustworthy without it."""
-
 from rdkit import Chem
 
 from mol_optim import config

@@ -1,9 +1,3 @@
-"""Every knob, as frozen dataclasses built from a TOML file. Never a global config bag.
-
-`load` is the only thing that reads the file; everything downstream is passed a
-dataclass explicitly. A value used in exactly one place is a literal at that place.
-"""
-
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path

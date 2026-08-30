@@ -1,12 +1,3 @@
-"""The pIC50 regressor as the RL reward, with guardrails.
-
-An agent optimizing a surrogate finds its mistakes. Three guardrails fire in order: zero
-the reward below `domain_floor` Tanimoto to the training set, subtract `pessimism` times
-the ensemble spread, clip at the most potent training compound. The regressor's own
-evaluation measured the domain as the thing with evidence behind it (MAE 1.15 at Tanimoto
-0.41 against 0.65 at 0.94) and disagreement as nearly flat (0.08).
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -74,7 +65,6 @@ def load(
 
 
 def nearest_training_similarity(reward: Reward, mol: Chem.Mol) -> float:
-    """Tanimoto to the closest compound the regressor was fitted on."""
     return max(
         DataStructs.BulkTanimotoSimilarity(
             MORGAN.GetFingerprint(mol), list(reward.train_fingerprints)

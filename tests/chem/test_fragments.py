@@ -1,5 +1,3 @@
-"""The substituent action space. See mol_optim/chem/fragments.py."""
-
 from rdkit import Chem
 
 from mol_optim.chem import fragments, graph_key

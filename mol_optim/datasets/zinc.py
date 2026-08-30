@@ -1,10 +1,3 @@
-"""ZINC, the unlabelled molecules the encoder is pretrained on.
-
-Molecules arrive as text because ZINC is published that way; nothing downstream of
-`molecules()` handles a SMILES string. The URL and hash live in the config file, so
-swapping in another unlabelled set is a config change, not a code change.
-"""
-
 import hashlib
 import urllib.request
 from pathlib import Path

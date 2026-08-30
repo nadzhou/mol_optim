@@ -1,5 +1,3 @@
-"""The molecules the RL run starts from."""
-
 from rdkit import DataStructs
 
 from mol_optim.chem import seeds, splits

@@ -1,7 +1,4 @@
-"""Reward and loss curves from a training log. Reading, not training."""
-
 import csv
-from pathlib import Path
 
 import matplotlib
 
@@ -13,7 +10,6 @@ from mol_optim import config
 
 
 def rolling_mean(values: np.ndarray, window: int) -> np.ndarray:
-    """Trailing mean; the first `window - 1` points are means of what exists so far."""
     # A run shorter than the window is the running mean throughout. Without this the
     # default window of 100 cannot plot a run of fewer than 100 episodes.
     window = min(window, len(values))

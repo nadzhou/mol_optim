@@ -1,11 +1,3 @@
-"""Recovery of held-out analogs: the metric a run is judged on.
-
-The seed exclusion and the deduplication are the two places this can silently overcount
-— an agent that takes the no-op every step would otherwise "recover" the molecule it was
-handed, and one measured compound logged under three BindingDB records would count three
-times.
-"""
-
 import csv
 from pathlib import Path
 

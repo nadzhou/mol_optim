@@ -1,9 +1,3 @@
-"""Reading the ZINC file. The download is pinned by hash; this is the parse below it.
-
-Written against temporary files rather than the real 12 MB one, so it runs on a checkout
-that has not downloaded anything. `test_pretrain.py` covers the real file.
-"""
-
 from pathlib import Path
 
 import pytest

@@ -1,14 +1,3 @@
-"""Masked-atom pretraining on ZINC.
-
-Two failure modes here produce a beautiful loss curve and a worthless encoder, and
-nothing else in the suite notices either one. A mask the head can see through makes the
-task free. A checkpoint that does not load, or loads against a featurization whose
-columns have moved, makes the pretraining a no-op that looks exactly like a hard
-research problem. The first four tests and the checkpoint tests are those two.
-
-The learning tests train, so they are slow: a run is the only way to see a loss fall.
-"""
-
 import numpy as np
 import pytest
 import torch
