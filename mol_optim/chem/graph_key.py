@@ -31,8 +31,7 @@ def normalize(mol: Chem.Mol) -> Chem.Mol:
 
 
 def canonical_hash(mol: Chem.Mol) -> str:
-    # Constitutional: L- and D-alanine get one name. The atom-level action space never
-    # sets a stereocentre, and ranking without chirality is what makes the key survive a
+    # Constitutional: L- and D-alanine get one name. Without chirality the key survives a
     # trip through an SDF, where a molblock re-perceives double-bond stereo from geometry.
     return _hash(mol, chirality=False)
 

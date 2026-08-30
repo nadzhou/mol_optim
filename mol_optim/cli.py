@@ -45,7 +45,6 @@ from mol_optim.report import (
 AGENTS = {
     "dqn": dqn.run,
     "dqn_measured": dqn_measured.run,  # the positive control: measured pIC50, not a model
-    # The search-strength baseline: same action space, same budget, no learning.
     "evolutionary": evolutionary.run,
     "evolutionary_measured": evolutionary_measured.run,
     "ppo": ppo.run,
@@ -69,10 +68,7 @@ def _agents(settings: config.Settings) -> None:
             )
         print(f"-- {spec.name} ({spec.kind})", flush=True)
 
-        # Written before the run, not after, so a run that crashes still says what it
-        # was. A CSV whose settings live only in a config file someone has since edited
-        # is a number nobody can reproduce — this repo has one of those already, the
-        # 0.859 in results/README.md that a later run could not match.
+        # Before the run, not after, so a run that crashes still says what it was.
         commit = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True,
@@ -142,8 +138,7 @@ def main() -> None:
     settings = config.load(Path(sys.argv[1]))
     unknown = [step for step in settings.steps if step not in STEPS]
     if unknown:
-        # Checked before anything runs, so a typo in the last step does not surface
-        # twenty minutes into the first one.
+        # Before anything runs, so a typo in the last step surfaces now.
         raise SystemExit(
             f"no step named {', '.join(unknown)}; there is {', '.join(STEPS)}"
         )

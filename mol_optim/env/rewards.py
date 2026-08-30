@@ -22,9 +22,7 @@ from mol_optim.nets import regressor
 
 MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
-# The agents divide `score` by this to land in [0, 1], where the published learning
-# rate and the MSE loss were tuned. Zero stays zero, so the applicability-domain
-# filter still reads as "nothing".
+# Agents divide `score` by this to land in [0, 1]. Zero stays zero.
 PIC50_SCALE = 10.0
 
 
@@ -44,9 +42,8 @@ def load(
     domain_floor: float = 0.45,
     pessimism: float = 0.5,
 ) -> Reward:
-    # 0.45 sits under the least similar held-out target of seed 0 (0.490, median 0.655)
-    # and over everything a PPO run at 0.3 preferred (0.30-0.40). At 0.3 the agent
-    # optimized pressed against the floor instead of inside the domain.
+    # 0.45 sits under seed 0's least similar target (0.490) and over everything a
+    # PPO run at 0.3 preferred (0.30-0.40).
     if not checkpoint_path.exists():
         raise FileNotFoundError(
             f"{checkpoint_path} is missing. Run the 'regressor' step first."

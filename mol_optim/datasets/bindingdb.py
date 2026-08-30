@@ -37,7 +37,6 @@ class Compound:
     pic50: float
     num_measurements: int  # how many BindingDB rows the median was taken over
     pic50_spread: float  # max - min across those rows; 0.0 for a single measurement
-    # Carried, not recomputed: the split and the leakage tests ask for it repeatedly.
     scaffold: str
 
 
@@ -49,8 +48,7 @@ def to_pic50(ic50_nm: float) -> float:
 
 
 def median(values: list[float]) -> float:
-    # Median, not mean: duplicates are the same compound measured in different labs, and
-    # the disagreements reach 8 logs. One bad row should move the label by nothing.
+    # Median, not mean: lab-to-lab disagreements reach 8 logs.
     ordered = sorted(values)
     middle = len(ordered) // 2
     if len(ordered) % 2 == 1:
@@ -112,7 +110,6 @@ def run(settings: config.Settings) -> None:
                 continue
             if fields[TARGET_NAME].strip() != spec.construct:
                 continue
-            # A multi-chain entry is a complex; the IC50 belongs to the complex.
             if fields[NUM_CHAINS].strip() not in ("1", ""):
                 continue
             target_rows += 1
@@ -134,7 +131,7 @@ def run(settings: config.Settings) -> None:
             if mol is None or mol.GetNumAtoms() == 0:
                 unreadable += 1
                 continue
-            # Salts: the measurement is the largest fragment's, not "compound + HCl".
+            # The measurement is the largest fragment's, not "compound + HCl".
             fragments = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=True)
             mol = max(fragments, key=lambda fragment: fragment.GetNumHeavyAtoms())
 
@@ -163,9 +160,8 @@ def run(settings: config.Settings) -> None:
             },
         )
 
-    # Written, then read back with every key recomputed: a handful of macrocycles change
-    # name in transit because their geometry does not survive being drawn in 2D. They are
-    # dropped rather than left to make "the same compound is in both splits" untrue.
+    # Read back with keys recomputed: a few macrocycles change name in transit and
+    # are dropped, or they would land in both splits.
     keys = list(measurements)
     write(keys)
     from_disk = molio.read_named(spec.path)

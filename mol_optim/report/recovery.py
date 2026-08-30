@@ -55,8 +55,7 @@ from mol_optim.datasets import bindingdb
 ACTIVE = 8.0  # 10 nM — a lead series, the same threshold seeds.choose uses
 POTENT = 9.0  # 1 nM
 
-# How many held-out analogs the panel draws. Seed 3 has 94; a grid that size is a wall
-# of thumbnails nobody reads. Every analog the run found is drawn regardless of the cap.
+# Cap on drawn analogs. Every analog the run found is drawn regardless.
 PANEL_ANALOGS = 16
 
 
@@ -129,8 +128,7 @@ def panel(
     One picture per run, because a table saying "found 1 of 51" does not tell you whether
     the miss was a near-miss or a molecule falling apart. Only the drawing does.
     """
-    # Found analogs first, then the most potent of the rest — a run that finds nothing
-    # still gets a picture of what it was aiming at.
+    # Found first, then the most potent: a run that finds nothing still gets a picture.
     ranked = sorted(analogs.items(), key=lambda kv: (kv[0] not in found_keys, -kv[1].pic50))
     shown = ranked[:PANEL_ANALOGS]
     omitted = len(ranked) - len(shown)
@@ -171,8 +169,6 @@ def panel(
             legends=legends,
             returnPNG=False,
         )
-        # A band above each grid carrying the title, so the three blocks cannot be
-        # mistaken for one another when the picture is read at thumbnail size.
         banded = Image.new("RGB", (grid.width, grid.height + 34), "white")
         banded.paste(grid, (0, 34))
         Draw.rdMolDraw2D.MolDraw2DCairo(1, 1)  # ensures Cairo is loaded before text draw

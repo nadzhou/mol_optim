@@ -26,10 +26,8 @@ from mol_optim.chem import graph_key, seeds
 from mol_optim.env import environment, rewards
 from mol_optim.report import results
 
-# The DQN spends cfg.episodes reward evaluations, one terminal molecule each. Splitting
-# the same budget 50 wide and cfg.episodes // 50 deep is what makes the two comparable;
-# it is not a tuned number and there is no config knob for it, because the moment it
-# becomes one the budgets stop matching by construction.
+# 50 wide by cfg.episodes // 50 deep spends the DQN's exact reward budget. Not a knob:
+# the moment it becomes one the budgets stop matching by construction.
 POPULATION = 50
 
 
@@ -98,9 +96,8 @@ def search(
         if generation + 1 == generations:
             break
 
-        # Truncation selection: the better half survive, and each empty slot is one
-        # survivor with a random suffix of its path re-rolled. Mutating at position 0
-        # is a fresh random individual, which is the only immigration there is.
+        # Truncation selection: the better half survive, each empty slot a survivor
+        # with a random suffix re-rolled.
         population.sort(key=lambda individual: -individual[1])
         survivors = population[: POPULATION // 2]
         population = list(survivors)

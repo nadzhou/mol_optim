@@ -75,9 +75,7 @@ def run(settings: config.Settings) -> None:
     blocked = collections.Counter()
     for key, bound in bounds.items():
         if bound is None:
-            # Only the elements this analog actually needs more of than the seed has.
-            # Counting every element outside atom_types instead credits Br with blocking
-            # 143 analogs the seed's own bromine covers.
+            # Only elements this analog needs more of than the seed already has.
             atoms = collections.Counter(a.GetSymbol() for a in analogs[key].mol.GetAtoms())
             blocked.update(
                 element
@@ -98,15 +96,13 @@ def run(settings: config.Settings) -> None:
         print(f"{depth:>5} {sum(1 for b in reachable_bounds if b <= depth):>8}")
     print(f"{'any':>5} {len(reachable_bounds):>8}\n")
 
-    # The exact count. Deduplication is on the same canonical hash the recovery step
-    # matches on, so "reached" here and "found" there mean the same thing.
+    # Same canonical hash the recovery step matches on.
     print(f"{'edits':>5} {'new states':>11} {'total':>10} {'reached':>8} {'>=8':>4} {'>=9':>4}")
     seen = {graph_key.canonical_hash(seed.mol)}
     frontier = [seed.mol]
     for depth in range(1, spec.max_depth + 1):
         started = time.perf_counter()
-        # The last level's molecules are counted and dropped. Keeping them costs about a
-        # kilobyte each, and seed 1's third level is millions.
+        # The last level is counted and dropped: seed 1's third level is millions.
         keep = depth < spec.max_depth
         num_new = 0
         next_frontier = []

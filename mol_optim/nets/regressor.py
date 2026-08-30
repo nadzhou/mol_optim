@@ -156,7 +156,6 @@ def train_one(
         predicted = predict([model], validation_mols, cfg).mean
         mae = float(np.abs(predicted - validation_labels).mean())
         if mae < best_mae:
-            # In memory, not on disk: the run writes one checkpoint at the end.
             best_mae, best_epoch = mae, epoch
             best_state = {
                 name: tensor.clone() for name, tensor in model.state_dict().items()
@@ -176,15 +175,13 @@ def run(settings: config.Settings) -> None:
     spec = settings.regressor
     cfg = config.Config(seed=spec.cfg.seed)
     compounds = bindingdb.load(settings.bindingdb.path)
-    # Held out, not optionally: a regressor trained on a seed's series already knows the
-    # answer where the run begins.
+    # Held out, not optionally: otherwise the reward knows the answer where runs begin.
     chosen_seeds = seeds.choose(compounds)
     train_compounds, test_compounds = splits.scaffold_split(
         compounds,
         spec.cfg.test_fraction,
         held_out_scaffolds=seeds.held_out_scaffolds(chosen_seeds),
     )
-    # By scaffold too, or the stopping epoch is chosen on molecules it has seen.
     train_compounds, validation_compounds = splits.scaffold_split(train_compounds, 0.15)
     print(
         f"{len(compounds)} compounds — {len(train_compounds)} train, "
@@ -244,7 +241,6 @@ def run(settings: config.Settings) -> None:
                 "regressor_config": spec.cfg,
                 "featurization": featurize.signature(),
                 "pretrained_encoder": str(spec.pretrained_encoder),
-                # The reward's applicability domain needs to know what this was fitted on.
                 "train_keys": [
                     compound.mol.GetProp("_Name") for compound in train_compounds
                 ],
