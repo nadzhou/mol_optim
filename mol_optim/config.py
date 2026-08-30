@@ -13,9 +13,7 @@ from typing import Any, get_args, get_origin
 
 @dataclass(frozen=True)
 class Config:
-    # Defaults follow Google's configs/bootstrap_dqn.json, not MolDQN-pytorch/hyp.py.
-    # The PyTorch port deviates on gamma, ring sizes, buffer size, update interval and
-    # gradient clipping, and reproduces a visibly worse reward curve because of it.
+    # Defaults follow Google's bootstrap_dqn.json, not MolDQN-pytorch/hyp.py.
     seed: int = 0
 
     init_mol: str | None = None
@@ -23,21 +21,15 @@ class Config:
     allow_removal: bool = True
     allow_no_modification: bool = True
     allow_bonds_between_rings: bool = False
-    # 3- and 4-rings are strained and rarely make it into a real compound; the published
-    # config leaves them out.
     allowed_ring_sizes: tuple[int, ...] = (5, 6)
     max_steps_per_episode: int = 40
-    # Only the terminal molecule counts, so an intermediate reward is discounted by
-    # discount_factor ** steps_remaining. Separate from gamma below.
+    # Separate from gamma: this discounts by steps remaining in the episode.
     discount_factor: float = 0.9
 
-    # The published MolDQN numbers were tuned against a 2049 -> 1024 -> 512 -> 128 -> 32
-    # -> 1 MLP over a Morgan fingerprint: 2.7M parameters against this network's 56k.
     hidden_dim: int = 64
     num_message_passing_layers: int = 3
 
-    # gamma is 1.0 because the environment already discounts by steps remaining; a second
-    # discount here would charge the agent twice for taking its time.
+    # 1.0: the environment already discounts by steps remaining.
     gamma: float = 1.0
     learning_rate: float = 1e-4
     grad_clip_norm: float = 10.0
@@ -47,7 +39,6 @@ class Config:
     update_interval: int = 4  # gradient steps per environment step, published: every 4
     updates_per_interval: int = 1
 
-    # Piecewise linear: start -> mid at half the run -> end at the end.
     epsilon_start: float = 1.0
     epsilon_mid: float = 0.1
     epsilon_end: float = 0.01
@@ -57,17 +48,14 @@ class Config:
 
 @dataclass(frozen=True)
 class PretrainConfig:
-    # The encoder's shape stays in Config, so the pretrained encoder, the RL encoder and
-    # the regressor are built from one set of numbers and one checkpoint loads into all
-    # three. A hidden_dim here too would drift.
+    # Encoder shape stays in Config so one checkpoint loads into all three users.
     seed: int = 0
     num_molecules: int | None = None  # None means every molecule in the file
     num_holdout: int = 5000
     mask_fraction: float = 0.15  # Hu et al. 2020
     epochs: int = 10
     batch_size: int = 128
-    # 1e-3, not the DQN's 1e-4: supervised training with a fixed target, not a moving Q
-    # target that a large step can push away from itself.
+    # 1e-3, not the DQN's 1e-4: fixed target, not a moving Q target.
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
 
@@ -80,8 +68,7 @@ class RegressorConfig:
     batch_size: int = 128
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
-    # Five networks, different seeds, same data. The mean is the prediction; the spread is
-    # what the reward subtracts to stay pessimistic where the model is guessing.
+    # Mean is the prediction; the spread is what the reward subtracts.
     ensemble_size: int = 5
 
 
@@ -94,8 +81,6 @@ class RankerConfig:
     learning_rate: float = 1e-3
     grad_clip_norm: float = 10.0
     ensemble_size: int = 5
-    # A series of fewer than four compounds carries almost no ranking signal and its
-    # pairs dominate the count: most scaffolds have two or three members.
     min_series_size: int = 4
     max_pairs: int = 200_000
 
@@ -103,18 +88,14 @@ class RankerConfig:
 @dataclass(frozen=True)
 class PPOConfig:
     seed: int = 0
-    # Short episodes (6 edits on pIC50) make a single episode far too small a batch to
-    # estimate an advantage from.
     rollout_episodes: int = 16
     update_epochs: int = 4
     minibatch_steps: int = 32
     clip_epsilon: float = 0.2
     gae_lambda: float = 0.95
     value_coefficient: float = 0.5
-    # The candidate set is large and the policy is a softmax over it, so collapse is the
-    # failure mode. Small, but not zero.
+    # Collapse is the failure mode here. Small, but not zero.
     entropy_coefficient: float = 0.01
-    # 3e-4, not the DQN's 1e-4: PPO's clipped objective bounds its own step size.
     learning_rate: float = 3e-4
     grad_clip_norm: float = 10.0
     num_updates: int = 60
@@ -136,8 +117,8 @@ class BindingDBSpec:
     table: str = "BindingDB_All.tsv"
     path: Path = Path("data/egfr_ic50.sdf")
     uniprot: str = "P00533"
-    # One construct, not one UniProt id: P00533 covers 51 EGFR constructs, and pooling
-    # wild type with T790M puts one compound's two very different numbers under one label.
+    # One construct, not one UniProt id: pooling wild type with T790M merges two
+    # very different numbers for one compound.
     construct: str = "Epidermal growth factor receptor"
 
 
@@ -174,6 +155,8 @@ class AgentSpec:
     pretrained_encoder: Path | None = None
     report_every: int = 25
     top_k: int = 12
+    # Substituent-level actions; library mined from [bindingdb] path.
+    fragment_actions: bool = False
     cfg: Config = Config()
     ppo: PPOConfig = PPOConfig()
 
@@ -194,17 +177,14 @@ class RecoverySpec:
 class SubsetSpec:
     source: Path = Path("data/egfr_ic50.sdf")
     path: Path = Path("data/egfr_chno.sdf")
-    # H is listed because RDKit's implicit hydrogens never appear as atoms; leaving it
-    # out would read as excluding them.
+    # H is listed because implicit hydrogens never appear as atoms.
     elements: tuple[str, ...] = ("C", "H", "N", "O")
 
 
 @dataclass(frozen=True)
 class ReachableSpec:
     seed_molecule: int | None = None  # index into seeds.choose()
-    # The exact search's frontier grows about 40-fold a level: 3 is seconds, 4 is
-    # minutes, 5 is tens of minutes. The composition bound is printed to max_depth too
-    # and costs nothing, so a run past the exact search's reach still says something.
+    # The frontier grows about 40-fold a level: 3 is seconds, 5 is tens of minutes.
     max_depth: int = 3
     cfg: Config = Config()  # the action space being measured
 
@@ -291,10 +271,8 @@ def load(path: Path) -> Settings:
     config_names = {field.name for field in fields(Config)}
     for agent_table in table.pop("agents", []):
         mine, rest = _split(agent_table, AgentSpec)
-        # seed, learning_rate and grad_clip_norm are fields of both, and a flat agent
-        # table means them for whichever loop the `kind` names, so they go to both.
-        # Sending every shared key to PPOConfig alone made `seed = 1` on a DQN a silent
-        # no-op: the run read Config's default and three "different" seeds were one run.
+        # Shared keys go to both: sending them to PPOConfig alone made `seed = 1`
+        # on a DQN a silent no-op.
         unknown = sorted(set(rest) - config_names - ppo_names)
         if unknown:
             raise ValueError(

@@ -63,10 +63,14 @@ def test_measure_counts_the_intersection(tmp_path: Path):
         writer.writerow([1, 0.5, 0.0, 0.5, graph_key.canonical_hash(found.mol)])
         writer.writerow([2, 0.4, 0.0, 0.1, "not a molecule anyone measured"])
 
-    result = recovery.measure(log_path, analogs)
+    # measured = both analogs, so the unmeasured third row is what lands in `novel`.
+    result = recovery.measure(
+        log_path, analogs, frozenset(analogs), seed_key="the seed, unused here"
+    )
 
     assert (result.num_episodes, result.num_distinct, result.num_analogs) == (3, 2, 2)
     assert [c.pic50 for c in result.found] == [7.0]
+    assert (result.num_known, result.num_novel) == (0, 1)
 
 
 def test_seed_zero_analogs_match_the_documented_count(compounds):

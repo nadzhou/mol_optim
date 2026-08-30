@@ -1,12 +1,7 @@
 """AttrMask pretraining on ZINC: mask atoms, name them from the graph around them.
 
-One checkpoint initializes both the RL encoder and the pIC50 regressor.
-
-The mask is an all-zero atom feature row, and that is the design. It carries nothing —
-the AttrMask bug is a mask the head can see through, which looks like a beautiful loss
-curve — and it does not widen the input, so the RL encoder can still load the checkpoint.
-What survives masking is the atom's bond count, since that lives on the edges: intended,
-and why the shuffled-context control does not fall all the way to the prior.
+One checkpoint initializes both the RL encoder and the pIC50 regressor. The mask is an
+all-zero feature row: it carries nothing and does not widen the input.
 """
 
 import dataclasses

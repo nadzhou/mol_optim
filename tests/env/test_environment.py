@@ -132,3 +132,36 @@ def test_widening_atom_types_only_adds_candidates():
         for mol in environment.valid_actions(NAMED["aspirin"], cfg)
     }
     assert keys(narrow) < keys(wide)
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    [
+        "C1CC#CCC1",  # sp carbon cannot have 180 degrees inside a six-ring
+        "COOC",  # peroxide, and so trioxide
+        "COOOC",
+        "N#COc1ccccc1",  # cyanate ester
+    ],
+)
+def test_is_plausible_rejects_motifs_absent_from_both_corpora(smiles):
+    assert not environment.is_plausible(Chem.MolFromSmiles(smiles))
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    [
+        "CNNc1ccccc1",  # hydrazine: 1.7% of ZINC and of the EGFR set, so not this filter's job
+        "C#Cc1ccccc1",  # an alkyne is fine when it is not inside the ring
+        "COc1ccccc1",
+        "OC=Cc1ccccc1",  # enol, uncommon but measured
+    ],
+)
+def test_is_plausible_keeps_real_chemistry(smiles):
+    assert environment.is_plausible(Chem.MolFromSmiles(smiles))
+
+
+def test_valid_actions_never_offers_an_implausible_candidate():
+    """The filter runs inside _deduplicated, so it covers every action generator."""
+    cfg = config.Config(atom_types=("C", "O", "N"))
+    for candidate in environment.valid_actions(Chem.MolFromSmiles("COc1ccccc1"), cfg):
+        assert environment.is_plausible(candidate)

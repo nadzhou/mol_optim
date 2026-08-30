@@ -41,11 +41,12 @@ class Reward:
 def load(
     checkpoint_path: Path,
     dataset_path: Path,
-    domain_floor: float = 0.3,
+    domain_floor: float = 0.45,
     pessimism: float = 0.5,
 ) -> Reward:
-    # domain_floor 0.3 sits below the least-similar test decile (0.41), so it zeroes only
-    # molecules further out than anything the reported MAE describes.
+    # 0.45 sits under the least similar held-out target of seed 0 (0.490, median 0.655)
+    # and over everything a PPO run at 0.3 preferred (0.30-0.40). At 0.3 the agent
+    # optimized pressed against the floor instead of inside the domain.
     if not checkpoint_path.exists():
         raise FileNotFoundError(
             f"{checkpoint_path} is missing. Run the 'regressor' step first."

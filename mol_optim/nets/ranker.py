@@ -1,24 +1,11 @@
-"""A within-series ranker: what a substitution does to potency, not what a molecule binds at.
+"""A within-series ranker: what a substitution does to potency, not absolute potency.
 
-The pIC50 regressor is fitted to absolute potency and validated on MAE over a scaffold
-split. Both are the wrong quantity for lead optimization, and the gap is measured: its
-within-series Spearman is +0.38 on series it trained on and +0.36 on series it did not,
-so it ranks close analogs barely better than chance whether or not it has seen them. An
-agent rewarded by it is told that most real analogs of its seed are worse than the seed.
-
-So this is trained on the quantity the agent needs. The network scores one molecule, and
-the loss is on the *difference* between two molecules of the same scaffold series:
+Scores one molecule; the loss is on the difference between two of the same series:
 
     loss = ((s(a) - s(b)) - (y_a - y_b)) ** 2
 
-Two consequences of scoring molecules rather than pairs. The score is exactly
-antisymmetric by construction — s(a) - s(b) = -(s(b) - s(a)) — with no need to train both
-orderings or to average them at inference. And the RL loop can read s(mol) directly as a
-reward, with no reference molecule to carry around, because an additive constant per
-series does not change an argmax.
-
-Only within-series pairs are used. A pair drawn from two different scaffolds teaches
-absolute potency again, which is the thing that already does not work.
+So the score is antisymmetric by construction, and the RL loop can read s(mol) directly
+as a reward. Only within-series pairs are used.
 """
 
 import time

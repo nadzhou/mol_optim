@@ -1,9 +1,4 @@
-"""DQN on the molecule MDP — the whole training step, flat and in order.
-
-Reads top to bottom: enumerate candidates, score them, act, store, update. The
-reference splits the update across a helper that loops over the batch in Python; here
-it is one batched forward pass, inline, where the shapes are visible.
-"""
+"""DQN on the molecule MDP: enumerate candidates, score, act, store, update."""
 
 import time
 from dataclasses import replace
@@ -15,18 +10,15 @@ import torch
 from rdkit import Chem
 
 from mol_optim import config, determinism
-from mol_optim.chem import featurize, graph_key, seeds
+from mol_optim.chem import featurize, fragments, graph_key, seeds
 from mol_optim.nets import pretrain, q_network
+from mol_optim.datasets import bindingdb
 from mol_optim.env import environment, replay_buffer, rewards
 from mol_optim.report import results
 
 
 def epsilon_at_episode(episode_index: int, cfg: config.Config) -> float:
     """Piecewise linear: epsilon_start -> epsilon_mid at half the run -> epsilon_end.
-
-    The published schedule (run_dqn.py PiecewiseSchedule). The PyTorch port instead
-    multiplies epsilon by 0.99907 per episode, a schedule whose endpoint depends on how
-    many episodes you happen to run.
     """
     halfway = cfg.episodes / 2
     if episode_index < halfway:
@@ -45,6 +37,7 @@ def train(
     checkpoint_path: Path | None = None,
     report_every: int = 0,
     pretrained_encoder: Path | None = None,
+    action_space: environment.ActionSpace = environment.valid_actions,
 ) -> results.Run:
     determinism.seed_everything(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
@@ -75,7 +68,7 @@ def train(
 
     for episode_index in range(cfg.episodes):
         epsilon = epsilon_at_episode(episode_index, cfg)
-        episode = environment.reset(cfg)
+        episode = environment.reset(cfg, action_space)
         episode_losses: list[float] = []
         # Carried across the loop: this step's next-state candidates are the next
         # step's candidates, and featurizing them twice is a large share of a step.
@@ -93,7 +86,9 @@ def train(
                     )  # [num_candidates, 1]
                 choice = int(torch.argmax(q_candidates))
 
-            result = environment.step(episode, choice, reward_fn, cfg)
+            result = environment.step(
+                episode, choice, reward_fn, cfg, action_space
+            )
             next_steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
             next_candidates = featurize.graphs(episode.valid_actions)
             buffer.push(
@@ -224,6 +219,14 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
             f"starting from seed {spec.seed_molecule}: "
             f"{init_mol.GetNumHeavyAtoms()} heavy atoms, reward {reward_fn(init_mol):.4f}"
         )
+    action_space = environment.valid_actions
+    if spec.fragment_actions:
+        library = fragments.library(
+            [compound.mol for compound in bindingdb.load(settings.bindingdb.path)]
+        )
+        print(f"fragment action space: {len(library)} substituents")
+        action_space = environment.fragment_actions(library)
+
     return train(
         replace(spec.cfg, init_mol=init_mol),
         reward_fn,
@@ -231,4 +234,5 @@ def run(settings: config.Settings, spec: config.AgentSpec) -> results.Run:
         checkpoint_path=settings.runs / f"{spec.name}.pt",
         report_every=spec.report_every,
         pretrained_encoder=spec.pretrained_encoder,
+        action_space=action_space,
     )

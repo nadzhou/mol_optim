@@ -1,14 +1,6 @@
 """The molecule MDP: atom-level graph edits, ported from MolDQN.
 
-The state is an RDKit molecular graph and stays one for the whole episode. Nothing here
-writes or parses a molecule as text — candidates are built by editing an RWMol, and
-identity comes from graph_key.canonical_hash, taken off the graph itself. Molecules
-become text only at the boundary, in molio.py and results.top_k, where a person
-looks at them.
-
-Restyled from the reference implementation: the reward arrives as a function rather
-than a subclass override, and the three single-call action generators are inlined into
-valid_actions.
+Identity comes from graph_key.canonical_hash, off the graph, never a SMILES round-trip.
 """
 
 import itertools
@@ -18,7 +10,25 @@ from typing import Callable
 from rdkit import Chem
 
 from mol_optim import config
-from mol_optim.chem import graph_key
+from mol_optim.chem import fragments, graph_key
+
+ActionSpace = Callable[[Chem.Mol | None, config.Config], tuple[Chem.Mol, ...]]
+
+
+# Zero occurrences in both ZINC and the measured EGFR set, so no target contains one.
+IMPLAUSIBLE = tuple(
+    Chem.MolFromSmarts(smarts)
+    for smarts in (
+        "[CX2;r3,r4,r5,r6,r7]#[CX2]",
+        "[CX2;r3,r4,r5,r6,r7](=*)=*",
+        "[OX2]-[OX2]",
+        "[OX2]-[CX2]#[NX1]",
+    )
+)
+
+
+def is_plausible(mol: Chem.Mol) -> bool:
+    return not any(mol.HasSubstructMatch(motif) for motif in IMPLAUSIBLE)
 
 
 @dataclass(frozen=True)
@@ -38,11 +48,9 @@ class Episode:
 
 
 def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol, ...]:
-    """Every graph reachable from `state` in one edit, deduplicated and in a fixed order.
+    """Every graph reachable from `state` in one edit, deduplicated and ordered.
 
-    An action *is* the resulting molecule — the agent scores next states, it does not
-    emit a fixed-size action distribution. Two edits landing on the same graph appear
-    once, and the order is by canonical hash so a run is reproducible.
+    An action *is* the resulting molecule: the agent scores next states.
     """
     if state is None:
         candidates = []
@@ -59,15 +67,12 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
         element: max(periodic_table.GetValenceList(element))
         for element in cfg.atom_types
     }
-    # Index i of this list is the bond of order i; index 0 (None) means "no bond", which
-    # makes the bond order arithmetic below a plain list lookup.
     bond_orders = [
         None,
         Chem.BondType.SINGLE,
         Chem.BondType.DOUBLE,
         Chem.BondType.TRIPLE,
     ]
-    # atoms_with_free_valence[order] = atoms that can accept a new bond of that order.
     # Bounded by the bond orders that exist, not by the largest valence in atom_types:
     # sulfur's is 6, and a methane state then asks for bond_orders[4].
     atoms_with_free_valence = {
@@ -79,7 +84,6 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
 
     candidates: list[Chem.Mol] = []
 
-    # Atom addition: hang one new atom off every atom with room for that bond order.
     for order, atom_indices in atoms_with_free_valence.items():
         for atom_idx in atom_indices:
             for element in cfg.atom_types:
@@ -92,15 +96,11 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
                     continue
                 candidates.append(candidate.GetMol())
 
-    # Bond addition: a new bond between two existing atoms, or an upgrade of one that is
-    # already there (single -> double -> triple). Aromatic bonds are never modified.
     for order, atom_indices in atoms_with_free_valence.items():
         for atom1, atom2 in itertools.combinations(atom_indices, 2):
-            # Read the bond off a copy, so the SetBondType below cannot reach `mol`.
+            # Off a copy, so the SetBondType below cannot reach `mol`.
             bond = Chem.Mol(mol).GetBondBetweenAtoms(atom1, atom2)
             candidate = Chem.RWMol(mol)
-            # Kekulize so sanitization does not trip over aromatic flags. Bonds that are
-            # aromatic in `mol` are skipped outright, not rewritten.
             Chem.Kekulize(candidate, clearAromaticFlags=True)
             if bond is not None:
                 if bond.GetBondType() not in bond_orders:
@@ -127,7 +127,6 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
                 continue
             candidates.append(candidate.GetMol())
 
-    # Bond removal: downgrade a bond, or delete it outright.
     if cfg.allow_removal:
         for order in (1, 2, 3):
             for existing_bond in mol.GetBonds():
@@ -151,15 +150,13 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
                     )
                     if Chem.SanitizeMol(candidate, catchErrors=True):
                         continue
-                    # Deleting a bond can split the graph. Keep the action only if what
-                    # is left is one fragment, or one fragment plus a lone atom; never
-                    # score a pair of orphaned fragments as a molecule.
-                    fragments = sorted(
+                    # Never score a pair of orphaned fragments as one molecule.
+                    pieces = sorted(
                         Chem.GetMolFrags(candidate, asMols=True, sanitizeFrags=False),
-                        key=lambda fragment: fragment.GetNumAtoms(),
+                        key=lambda piece: piece.GetNumAtoms(),
                     )
-                    if len(fragments) == 1 or fragments[0].GetNumAtoms() == 1:
-                        candidates.append(fragments[-1])
+                    if len(pieces) == 1 or pieces[0].GetNumAtoms() == 1:
+                        candidates.append(pieces[-1])
 
     if cfg.allow_no_modification:
         candidates.append(Chem.Mol(mol))
@@ -170,22 +167,34 @@ def valid_actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol,
 def _deduplicated(candidates: list[Chem.Mol]) -> tuple[Chem.Mol, ...]:
     """One molecule per graph, ordered by canonical hash so the order is reproducible.
 
-    Perception is normalized first (see graph_key.normalize): the stored molecule, not
-    just its key, has to be the normalized one, or the same state reaches the network as
-    two different fingerprints depending on which edit built it.
+    Normalized first, or one graph reaches the network as two fingerprints.
     """
     by_hash: dict[str, Chem.Mol] = {}
     for candidate in candidates:
         normalized = graph_key.normalize(candidate)
+        # After normalize: is_plausible reads ring membership, which sanitize sets up.
+        if not is_plausible(normalized):
+            continue
         by_hash.setdefault(graph_key.canonical_hash(normalized), normalized)
     return tuple(by_hash[key] for key in sorted(by_hash))
 
 
-def reset(cfg: config.Config) -> Episode:
+def fragment_actions(library: tuple[fragments.Fragment, ...]) -> ActionSpace:
+    """Substituent-level action space, bound to one library. See chem/fragments.py."""
+
+    def actions(state: Chem.Mol | None, cfg: config.Config) -> tuple[Chem.Mol, ...]:
+        if state is None:
+            return valid_actions(None, cfg)
+        return _deduplicated(fragments.substitutions(state, library))
+
+    return actions
+
+
+def reset(cfg: config.Config, action_space: ActionSpace = valid_actions) -> Episode:
     return Episode(
         state=cfg.init_mol,
         num_steps_taken=0,
-        valid_actions=valid_actions(cfg.init_mol, cfg),
+        valid_actions=action_space(cfg.init_mol, cfg),
     )
 
 
@@ -194,12 +203,9 @@ def step(
     action_index: int,
     reward_fn: Callable[[Chem.Mol], float],
     cfg: config.Config,
+    action_space: ActionSpace = valid_actions,
 ) -> Result:
-    """Moves to the candidate at `action_index` and scores the graph it lands on.
-
-    The action is an index into episode.valid_actions rather than a molecule, so a step
-    to a graph that is not a legal successor cannot be expressed.
-    """
+    """Moves to the candidate at `action_index` and scores the graph it lands on."""
     if episode.num_steps_taken >= cfg.max_steps_per_episode:
         raise ValueError("This episode is terminated.")
     if not 0 <= action_index < len(episode.valid_actions):
@@ -209,11 +215,10 @@ def step(
 
     episode.state = episode.valid_actions[action_index]
     episode.num_steps_taken += 1
-    episode.valid_actions = valid_actions(episode.state, cfg)
+    episode.valid_actions = action_space(episode.state, cfg)
 
     steps_remaining = cfg.max_steps_per_episode - episode.num_steps_taken
-    # Only the molecule at the end of an episode really counts, so a reward collected
-    # with steps still to come is discounted by that many steps.
+    # Only the terminal molecule counts; earlier ones are discounted by steps left.
     reward = reward_fn(episode.state) * cfg.discount_factor**steps_remaining
     return Result(
         state=episode.state, reward=reward, terminated=steps_remaining == 0
